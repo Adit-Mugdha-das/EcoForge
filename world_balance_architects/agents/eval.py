@@ -147,23 +147,28 @@ def _score_temperature(val: float) -> float:
 
 def _collapse_penalty(world) -> float:
     """
-    Heavy negative score when any resource is dangerously low.
-    From .tex: -100 if resource < 20, -20 if resource < 40.
-    Applied to water, food, and oxygen (temperature handled separately).
+    Heavy negative score when any resource is dangerously low OR dangerously high.
+    Both extremes are bad — agents must keep all meters in the balanced zone.
     """
     penalty = 0.0
     for val in (world.water_level, world.food, world.oxygen):
+        # Too low — crisis
         if val < 20:
             penalty -= 100.0
         elif val < 40:
             penalty -= 20.0
+        # Too high — oversaturation (flooding, spoilage, imbalance)
+        elif val > 90:
+            penalty -= 30.0
+        elif val > 80:
+            penalty -= 8.0
 
-    # Temperature extremes (0-25 or 75-100)
-    if world.temperature < 25 or world.temperature > 75:
+    # Temperature extremes — both directions equally dangerous
+    if world.temperature < 25 or world.temperature > 80:
         penalty -= 50.0
-    elif world.temperature < 30 or world.temperature > 70:
-        penalty -= 15.0
-    elif world.temperature < 40:   # below optimal range — warn agents early
+    elif world.temperature < 30 or world.temperature > 75:
+        penalty -= 20.0
+    elif world.temperature < 40 or world.temperature > 65:
         penalty -= 8.0
 
     return penalty
@@ -171,24 +176,35 @@ def _collapse_penalty(world) -> float:
 
 def _asset_value(world, agent: str) -> float:
     """
-    Score agent's strategic assets.
+    Score agent's strategic assets — context-sensitive.
+    Building something that oversaturates a meter is less valuable.
     From .tex:  forests ×2, farms ×3, reservoirs ×4
-    Here scaled down slightly and made maturity/stage aware.
     """
     value = 0.0
+
+    # Context multipliers — an asset is less valuable if the meter it fills is too full
+    water_mult = 1.0 if world.water_level < 75 else max(0.1, 1.0 - (world.water_level - 75) / 25)
+    food_mult  = 1.0 if world.food < 75        else max(0.1, 1.0 - (world.food - 75) / 25)
+    oxy_mult   = 1.0 if world.oxygen < 75      else max(0.1, 1.0 - (world.oxygen - 75) / 25)
+
     for _, cell in world.get_agent_cells(agent):
         if cell.terrain == TERRAIN_FOREST:
-            forest_val = 2.0 + cell.forest_maturity * 0.5    # 2.0–3.5
-            # Forests are less strategically valuable when planet is already cold
+            forest_val = (3.0 + cell.forest_maturity * 0.5) * oxy_mult  # 3.0–4.5
+            # Extra discount if planet is already cold — more forests make it worse
             if world.temperature < TEMP_OPTIMAL_MIN:
-                forest_val *= 0.3   # very cold — forests are a liability
+                forest_val *= 0.3
             value += forest_val
+
         elif cell.terrain == TERRAIN_FARM:
-            value += 3.0 + cell.crop_stage * 0.5         # 3.0–4.5
+            value += (3.0 + cell.crop_stage * 0.5) * food_mult
+
         elif cell.terrain == TERRAIN_RESERVOIR:
-            value += 4.0
+            value += 4.0 * water_mult
+
         elif cell.terrain == TERRAIN_RIVER:
-            value += 1.0
+            value += 1.0 * water_mult
+
         elif cell.terrain == TERRAIN_SOLAR:
-            value += 2.0
+            value += 2.0   # solar always has value (score income)
+
     return value

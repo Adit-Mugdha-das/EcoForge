@@ -53,7 +53,7 @@ HIGH_THRESHOLD = 66.6
 
 # --- Simulation rates ---
 WATER_FLOW_RATE        = 1.5   # how fast water spreads to neighbors
-CROP_GROWTH_RATE       = 3     # turns per growth stage (9 steps to fully mature)
+CROP_GROWTH_RATE       = 2     # turns per growth stage (6 steps to fully mature)
 FOREST_MATURATION_TURNS = 3   # turns for a forest to reach maturity (9 steps total)
 TEMP_CHANGE_RATE       = 0.5  # degrees changed per farm/forest/solar per turn
 
