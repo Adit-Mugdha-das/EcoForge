@@ -7,6 +7,7 @@ import sys
 
 from config import *
 from engine.world import World
+from engine.simulate import simulate
 from render.renderer import Renderer
 
 
@@ -20,9 +21,12 @@ def main():
     # ---- Game state ----
     world    = World()
     renderer = Renderer(screen)
+    game_over = False
+    end_reason = None
 
     # Print ASCII grid to terminal so we can verify the layout immediately
     world.print_grid()
+    print("\nControls: SPACE = next turn | R = reset | ESC = quit\n")
 
     # ---- Main loop ----
     running = True
@@ -40,10 +44,17 @@ def main():
                 if event.key == pygame.K_ESCAPE:
                     running = False
 
-                # SPACE — manually advance one agent turn (placeholder)
-                # This will later be replaced by AI agent calls
-                if event.key == pygame.K_SPACE:
-                    _placeholder_turn(world)
+                # R — reset game
+                if event.key == pygame.K_r:
+                    world      = World()
+                    game_over  = False
+                    end_reason = None
+                    world.print_grid()
+                    print("Game reset.\n")
+
+                # SPACE — advance one agent turn (placeholder until AI is ready)
+                if event.key == pygame.K_SPACE and not game_over:
+                    game_over, end_reason = _placeholder_turn(world)
 
         # --- Draw ---
         renderer.draw(world)
@@ -56,23 +67,43 @@ def main():
 
 def _placeholder_turn(world: World):
     """
-    Temporary function: just switches the active agent and logs it.
-    This will be replaced by actual AI agent decision calls
-    once the agents are implemented.
+    Advance one agent's turn:
+    1. Log a 'pass' action (placeholder for AI decision).
+    2. Run the world simulation (water, crops, forests, meters).
+    3. Switch active agent.
+    4. Print terminal summary.
+    5. Check game-over conditions.
+
+    Returns (game_over: bool, reason: str | None).
     """
     prev_agent = world.current_agent
-    world.switch_agent()
-    world.log_action(f"Agent {prev_agent} passed (no AI yet)")
 
-    # Check for game over
+    # Placeholder: agent passes (no AI yet)
+    world.log_action(f"Agent {prev_agent} passed")
+
+    # Run simulation after each agent's turn
+    simulate(world)
+
+    # Switch active agent
+    world.switch_agent()
+
+    # Terminal summary every full round (after Agent B acts)
+    if world.current_agent == AGENT_A:
+        world.print_grid()
+
+    # Check game-over
     over, reason = world.is_game_over()
     if over:
         winner = world.get_winner()
-        print(f"\nGame Over — {reason}!")
-        if winner:
-            print(f"Winner: Agent {winner}")
-        else:
-            print("Result: Draw")
+        print(f"\n{'='*40}")
+        print(f"GAME OVER — {reason.upper()}")
+        print(f"Winner: Agent {winner}" if winner else "Result: Draw")
+        print(f"Final scores — A: {world.scores[AGENT_A]:.1f}  "
+              f"B: {world.scores[AGENT_B]:.1f}")
+        print(f"{'='*40}\n")
+        return True, reason
+
+    return False, None
 
 
 if __name__ == "__main__":
