@@ -173,14 +173,20 @@ def _update_global_meters(world):
 
     # ---- Derived cross-meter effects ----
 
-    # Flooding: excess water (>80) drains away faster (evaporation + runoff)
-    flood_drain = max(0.0, world.water_level - 80) * 0.08
+    # Flooding: excess water (>80) drains strongly — runoff + evaporation
+    flood_drain = max(0.0, world.water_level - 80) * 0.15   # was 0.08
 
     # Heat evaporation: high temperature dries out the planet
     heat_evap = max(0.0, world.temperature - 70) * 0.06
 
-    # Food spoilage: excess food (>80) rots each turn
-    food_spoilage = max(0.0, world.food - 80) * 0.10
+    # Food spoilage: excess food (>80) rots quickly
+    food_spoilage = max(0.0, world.food - 80) * 0.20
+
+    # Population eats more when food is abundant
+    population_consumption = 1.0 + max(0.0, world.food - 50) * 0.03
+
+    # Oxygen self-regulation: excess oxygen (>80) dissipates fast
+    oxygen_bleed = max(0.0, world.oxygen - 80) * 0.20
 
     # Crop heat stress: farms produce less food when temperature is very high
     if world.temperature > 75:
@@ -203,16 +209,18 @@ def _update_global_meters(world):
         + reservoir_count * 0.6   # reservoirs amplify water
         - farm_count      * 0.4   # farms need irrigation
         - 0.8                     # passive evaporation
-        - flood_drain             # extra drain when flooded (>80)
+        - flood_drain             # strong drain when flooded (>80)
         - heat_evap               # extra drain in extreme heat
     )
     world.water_level = _clamp(world.water_level + water_delta)
 
     # ---- Food delta ----
+    # Passive farm production is intentionally low — agents must actively HARVEST
+    # to get big food bursts. This prevents food from silently capping at 100.
     food_delta = (
-        mature_farm_count * 1.5 * farm_efficiency  # heat/flood stress reduces yield
-        - 1.0                                       # population eats each turn
-        - food_spoilage                             # food rots when too abundant (>80)
+        mature_farm_count * 0.8 * farm_efficiency  # low steady drip (harvest is the main income)
+        - population_consumption                    # population eats more when food is high
+        - food_spoilage                             # food rots fast when too abundant (>80)
     )
     world.food = _clamp(world.food + food_delta)
 
@@ -222,14 +230,13 @@ def _update_global_meters(world):
         1 for r in range(GRID_HEIGHT) for c in range(GRID_WIDTH)
         if world.grid[r][c].terrain == TERRAIN_FOREST
     )
-    # Young forests: 0.3 oxygen per tile immediately. Mature forests: extra 0.3 per maturity level.
-    # This ensures agents see benefit from planting forests right away.
     oxygen_delta = (
-        forest_count        * 0.3   # base oxygen from any forest (even maturity 0)
-        + forest_maturity_sum * 0.3  # bonus from mature forests
+        forest_count        * 0.2   # base oxygen from any forest (even maturity 0)
+        + forest_maturity_sum * 0.08 # bonus from mature forests (kept low — bleed handles excess)
         - farm_count  * 0.05         # agriculture slightly reduces oxygen
         - solar_count * 0.1          # industrial panels consume oxygen
         - 0.3                        # passive atmospheric drain
+        - oxygen_bleed               # excess oxygen dissipates fast (>80)
     )
     world.oxygen = _clamp(world.oxygen + oxygen_delta)
 
@@ -251,6 +258,7 @@ def _update_global_meters(world):
         - water_coverage * 0.01  # wetlands cool slightly
     )
     world.temperature = _clamp(world.temperature + temp_delta)
+
 
 
 # =============================================================================
@@ -283,10 +291,16 @@ def _award_turn_scores(world):
                 asset_score += 0.1
         world.scores[agent] += asset_score
 
-    # Eco point passive income (small amount each sim step)
-    ECO_PASSIVE = 1
-    world.eco_points[AGENT_A] = min(99, world.eco_points[AGENT_A] + ECO_PASSIVE)
-    world.eco_points[AGENT_B] = min(99, world.eco_points[AGENT_B] + ECO_PASSIVE)
+    # Eco point income — base passive + solar bonus + mature farm bonus
+    # Solar plants are energy generators — their main game role is eco supply
+    for agent in (AGENT_A, AGENT_B):
+        eco_gain = 2   # base passive income (raised from 1 to ensure agents can always act)
+        for (r, c), cell in world.get_agent_cells(agent):
+            if cell.terrain == TERRAIN_SOLAR:
+                eco_gain += 1        # each solar plant adds +1 eco/step
+            elif cell.terrain == TERRAIN_FARM and cell.crop_stage == 3:
+                eco_gain += 0        # mature farms: income via harvest only
+        world.eco_points[agent] = min(99, world.eco_points[agent] + eco_gain)
 
 
 # =============================================================================

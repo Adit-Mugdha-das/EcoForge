@@ -187,15 +187,18 @@ class World:
 
     def _score_meter(self, val, low=METER_OPTIMAL_LOW, high=METER_OPTIMAL_HIGH):
         """
-        Score a resource meter on 0.0-1.0.
-        1.0 when in optimal range (50-80), degrades linearly outside.
+        Score a resource meter on -0.2 to 1.0.
+        1.0 = in optimal range (50-80).
+        Degrades linearly outside optimal range.
+        Goes slightly negative above 95 — extreme oversaturation actively harms stability.
         """
         if low <= val <= high:
             return 1.0
         elif val < low:
             return max(0.0, val / low)
         else:
-            return max(0.0, 1.0 - (val - high) / 20.0)
+            # Steeper penalty on high side: 0 at val=95, -0.2 at val=100
+            return max(-0.2, 1.0 - (val - high) / 15.0)
 
     def _score_temperature(self, val):
         """

@@ -240,7 +240,7 @@ class HarvestCrop(Action):
     name = "Harvest Crop"
     cost = ACTION_COSTS['harvest_crop']
 
-    FOOD_YIELD = 8.0   # immediate food meter gain on harvest
+    FOOD_YIELD = 15.0   # immediate food meter gain on harvest (main food income source)
 
     def get_valid_targets(self, world, agent) -> list:
         if not self.can_afford(world, agent):
@@ -258,13 +258,15 @@ class HarvestCrop(Action):
         cell = world.grid[row][col]
         cell.crop_stage = 0   # reset to regrow
         cell.crop_timer = 0
-        # Give immediate food boost (capped at 100)
-        world.food = min(100.0, world.food + self.FOOD_YIELD)
+        # Harvested food is capped by storage — only add what fits below 85
+        # (realistic: surplus crops spoil if silos are full)
+        actual_yield = max(0.0, min(self.FOOD_YIELD, 85.0 - world.food))
+        world.food = min(100.0, world.food + actual_yield)
         self._deduct(world, agent)
-        # Bounty also earns score directly
+        # Score bonus regardless — agent did the work
         world.scores[agent] += 2.0
         return (f"Agent {agent}: Harvested crop at ({row},{col}) "
-                f"[+{self.FOOD_YIELD:.0f} food]")
+                f"[+{actual_yield:.0f} food]")
 
 
 # =============================================================================
