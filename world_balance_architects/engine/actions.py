@@ -86,12 +86,12 @@ class BuildCanal(Action):
 # 2. Place Reservoir  (Land → Reservoir)
 # =============================================================================
 
-class PlaceReservoir(Action):
+class BuildReservoir(Action):
     """
     Build a water reservoir on a Land tile adjacent to a water source.
     Reservoirs are stronger water amplifiers than canals (water = 10, radius +2).
     """
-    name = "Place Reservoir"
+    name = "Build Reservoir"
     cost = ACTION_COSTS['place_reservoir']
 
     def get_valid_targets(self, world, agent) -> list:
@@ -189,13 +189,13 @@ class ClearForest(Action):
 # 5. Plant Crop  (Land → Farm, stage 0)
 # =============================================================================
 
-class PlantCrop(Action):
+class PlantFarm(Action):
     """
     Establish a farm on a Land tile that has water access.
     Water access means: the cell or any direct neighbor has water >= 3.
     Crops grow over several simulation steps before they can be harvested.
     """
-    name = "Plant Crop"
+    name = "Plant Farm"
     cost = ACTION_COSTS['plant_crop']
 
     def get_valid_targets(self, world, agent) -> list:
@@ -225,7 +225,7 @@ class PlantCrop(Action):
         cell.crop_timer  = 0
         self._mark_owner(cell, agent)
         self._deduct(world, agent)
-        return f"Agent {agent}: Planted crop at ({row},{col})"
+        return f"Agent {agent}: Planted farm at ({row},{col})"
 
 
 # =============================================================================
@@ -268,7 +268,39 @@ class HarvestCrop(Action):
 
 
 # =============================================================================
-# 7. Adjust Resource Allocation  (no tile change — sets agent priority mode)
+# 7. Build Solar Plant  (Land → Solar)
+# =============================================================================
+
+class BuildSolarPlant(Action):
+    """
+    Build a solar energy plant on any Land tile.
+    Expensive and warms the planet, but earns eco-point income faster and
+    contributes to strategic asset scoring. Use with caution near temperature
+    limits.
+    """
+    name = "Build Solar Plant"
+    cost = ACTION_COSTS['build_solar']
+
+    def get_valid_targets(self, world, agent) -> list:
+        if not self.can_afford(world, agent):
+            return []
+        return [
+            (r, c)
+            for r in range(GRID_HEIGHT)
+            for c in range(GRID_WIDTH)
+            if world.grid[r][c].terrain == TERRAIN_LAND
+        ]
+
+    def apply(self, world, agent, row, col) -> str:
+        cell = world.grid[row][col]
+        cell.terrain = TERRAIN_SOLAR
+        self._mark_owner(cell, agent)
+        self._deduct(world, agent)
+        return f"Agent {agent}: Built solar plant at ({row},{col})"
+
+
+# =============================================================================
+# 8. Adjust Resource Allocation  (no tile change — sets agent priority mode)
 # =============================================================================
 
 class AdjustAllocation(Action):
@@ -278,7 +310,7 @@ class AdjustAllocation(Action):
     and can subtly affect simulation weights for this agent's owned tiles.
     row and col are ignored — pass (0, 0) or (-1, -1).
     """
-    name = "Adjust Allocation"
+    name = "Adjust Resource Allocation"
     cost = ACTION_COSTS['adjust_allocation']
 
     MODES = ('farm', 'forest', 'balanced')
@@ -293,27 +325,29 @@ class AdjustAllocation(Action):
 
     def apply(self, world, agent, row, col) -> str:
         world.allocation_mode[agent] = self.mode
-        return f"Agent {agent}: Set allocation → {self.mode}"
+        return f"Agent {agent}: Set allocation -> {self.mode}"
 
 
 # =============================================================================
 # Registry and convenience helpers
 # =============================================================================
 
-# All actions that require a tile target (row, col)
+# All 7 actions — names match PDF exactly
+# Tile actions require a (row, col) target
 TILE_ACTIONS = [
-    BuildCanal(),
-    PlaceReservoir(),
     PlantForest(),
-    ClearForest(),
-    PlantCrop(),
+    BuildCanal(),
+    BuildReservoir(),
+    PlantFarm(),
     HarvestCrop(),
+    ClearForest(),
+    BuildSolarPlant(),
 ]
 
-# All allocation modes as pre-built action objects
+# All allocation modes as pre-built action objects (free action, no tile target)
 ALLOCATION_ACTIONS = [AdjustAllocation(m) for m in AdjustAllocation.MODES]
 
-# Complete action list
+# Complete action list (for reference)
 ALL_ACTIONS = TILE_ACTIONS + ALLOCATION_ACTIONS
 
 

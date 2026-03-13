@@ -163,6 +163,8 @@ def _collapse_penalty(world) -> float:
         penalty -= 50.0
     elif world.temperature < 30 or world.temperature > 70:
         penalty -= 15.0
+    elif world.temperature < 40:   # below optimal range — warn agents early
+        penalty -= 8.0
 
     return penalty
 
@@ -176,7 +178,11 @@ def _asset_value(world, agent: str) -> float:
     value = 0.0
     for _, cell in world.get_agent_cells(agent):
         if cell.terrain == TERRAIN_FOREST:
-            value += 2.0 + cell.forest_maturity * 0.5    # 2.0–3.5
+            forest_val = 2.0 + cell.forest_maturity * 0.5    # 2.0–3.5
+            # Forests are less strategically valuable when planet is already cold
+            if world.temperature < TEMP_OPTIMAL_MIN:
+                forest_val *= 0.3   # very cold — forests are a liability
+            value += forest_val
         elif cell.terrain == TERRAIN_FARM:
             value += 3.0 + cell.crop_stage * 0.5         # 3.0–4.5
         elif cell.terrain == TERRAIN_RESERVOIR:

@@ -176,10 +176,10 @@ def _update_global_meters(world):
     # Sinks: farms consume water through irrigation
     # Passive: slight natural evaporation each turn
     water_delta = (
-        river_count     * 0.5    # rivers slowly refill water meter
-        + reservoir_count * 1.5  # reservoirs are stronger water sources
-        - farm_count    * 0.3    # farms consume water (irrigation)
-        - 0.3                    # natural passive evaporation
+        river_count     * 0.2    # rivers slowly refill water meter
+        + reservoir_count * 0.6  # reservoirs are stronger water sources
+        - farm_count    * 0.4    # farms consume more water (irrigation is costly)
+        - 0.8                    # natural passive evaporation
     )
     world.water_level = _clamp(world.water_level + water_delta)
 
@@ -187,7 +187,7 @@ def _update_global_meters(world):
     # Only mature farms (stage 3) produce food each turn
     # Passive: small consumption each turn (population eats)
     food_delta = (
-        mature_farm_count * 2.5  # food production from mature crops
+        mature_farm_count * 1.5  # food production from mature crops
         - 1.0                    # population consumption per turn
     )
     world.food = _clamp(world.food + food_delta)
@@ -197,8 +197,8 @@ def _update_global_meters(world):
     # Farms and solar consume a little oxygen (land conversion / industry)
     # Passive: small atmospheric drain each turn
     oxygen_delta = (
-        forest_maturity_sum * 0.4  # each level of forest maturity produces oxygen
-        - farm_count  * 0.1        # agriculture slightly reduces oxygen
+        forest_maturity_sum * 0.5  # each level of forest maturity produces oxygen
+        - farm_count  * 0.05       # agriculture slightly reduces oxygen
         - solar_count * 0.1        # industrial panels
         - 0.3                      # passive atmospheric drain
     )
@@ -208,11 +208,21 @@ def _update_global_meters(world):
     # Farms (land clearing) and solar raise temperature
     # Forests cool temperature; effectiveness scales with maturity
     # Water coverage (wet cells) has a slight cooling effect
+    # Forest cooling is temperature-responsive:
+    # Forests cool strongly when planet is hot, gently when it's already cold.
+    if world.temperature > TEMP_OPTIMAL_MAX:
+        forest_cooling = forest_maturity_sum * 0.12   # above optimal: strong cool
+    elif world.temperature < TEMP_OPTIMAL_MIN:
+        forest_cooling = forest_maturity_sum * 0.03   # below optimal: barely cool
+    else:
+        forest_cooling = forest_maturity_sum * 0.07   # in optimal range: gentle cool
+
     temp_delta = (
-        farm_count   * 0.2             # agriculture warms planet
+        + 0.5                          # passive greenhouse warming
+        + farm_count   * 0.1           # agriculture warms planet
         + solar_count * 0.4            # solar panels generate heat
-        - forest_maturity_sum * 0.15   # mature forests cool most
-        - water_coverage * 0.05        # wetlands moderate temperature
+        - forest_cooling               # context-sensitive forest cooling
+        - water_coverage * 0.01        # wetlands moderate temperature (minor effect)
     )
     world.temperature = _clamp(world.temperature + temp_delta)
 

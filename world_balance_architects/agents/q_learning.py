@@ -36,17 +36,18 @@ from agents.eval import compute_reward, evaluate_state
 
 
 # Map action names → integer index in Q-table
-# All three AdjustAllocation flavours share index 6 (mode detail is secondary)
+# All three AdjustAllocation flavours share index 7 (mode detail is secondary)
 ACTION_INDEX = {
-    'Build Canal':       0,
-    'Place Reservoir':   1,
-    'Plant Forest':      2,
-    'Clear Forest':      3,
-    'Plant Crop':        4,
-    'Harvest Crop':      5,
-    'Adjust Allocation': 6,
+    'Plant Forest':              0,
+    'Build Canal':               1,
+    'Build Reservoir':           2,
+    'Plant Farm':                3,
+    'Harvest Crop':              4,
+    'Clear Forest':              5,
+    'Build Solar Plant':         6,
+    'Adjust Resource Allocation': 7,
 }
-N_ACTIONS = 7
+N_ACTIONS = 8
 
 
 class QLearningAgent(BaseAgent):

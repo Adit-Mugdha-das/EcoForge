@@ -7,6 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import copy
+import random
 from config import *
 from engine.actions import get_all_valid_moves, apply_action
 from engine.simulate import simulate
@@ -63,28 +64,37 @@ class BaseAgent:
 
     def get_sorted_moves(self, world, agent_id: str, k: int = 15) -> list:
         """
-        Return the top-k valid moves for `agent_id`, sorted by immediate
-        greedy evaluation score (best first).
+        Return the top-k valid moves, sorted by a cheap greedy score.
 
-        Capping the branching factor at k is critical for Minimax performance:
-        with ~150 valid moves on a 10×10 grid, uncapped depth-2 search would
-        require 150² = 22 500 deepcopy+simulate calls per turn.
-        With k=15: 15² = 225 — fast enough for real-time play.
+        Performance fixes vs naive approach:
+        - If >k*3 valid moves exist, randomly sample k*3 before scoring.
+          (avoids scoring all 150+ moves at every minimax node)
+        - quick_score does NOT call simulate() — just apply + evaluate.
+          (simulate is expensive; skipping it makes sorting ~10x faster)
+        - try/except guards against any edge-case crash in evaluation.
         """
         moves = get_all_valid_moves(world, agent_id)
-        if not moves or len(moves) <= k:
+        if not moves:
+            return []
+        if len(moves) <= k:
             return moves
 
-        # Shallow greedy score per move (depth-0 evaluation)
-        def quick_score(move):
-            action, r, c = move
-            w = copy.deepcopy(world)
-            apply_action(w, agent_id, action, r, c)
-            simulate(w)
-            return evaluate_state(w, self.agent_id)
+        # Random pre-sample: score at most k*3 candidates, not all 150+
+        pool = random.sample(moves, min(len(moves), k * 3))
 
-        moves.sort(key=quick_score, reverse=True)
-        return moves[:k]
+        def quick_score(move):
+            try:
+                action, r, c = move
+                w = copy.deepcopy(world)
+                apply_action(w, agent_id, action, r, c)
+                # No simulate() here — apply-only evaluation is fast enough
+                # for move ordering, and simulate is the expensive part
+                return evaluate_state(w, self.agent_id)
+            except Exception:
+                return float('-inf')   # failed = treat as worst option
+
+        pool.sort(key=quick_score, reverse=True)
+        return pool[:k]
 
     def __repr__(self) -> str:
         return f"<{self.name} agent_id={self.agent_id}>"

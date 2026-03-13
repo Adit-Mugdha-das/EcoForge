@@ -21,7 +21,7 @@ UI_PANEL_WIDTH    = SCREEN_WIDTH - UI_PANEL_X  # 300
 
 # --- Game ---
 MAX_TURNS             = 50
-STARTING_ECO_POINTS   = 20
+STARTING_ECO_POINTS   = 30
 
 # --- Terrain type constants ---
 TERRAIN_LAND      = 'land'
@@ -36,10 +36,10 @@ AGENT_A = 'A'
 AGENT_B = 'B'
 
 # --- Initial planet meter values (0-100) ---
-INITIAL_WATER       = 40.0
-INITIAL_FOOD        = 30.0
-INITIAL_OXYGEN      = 35.0
-INITIAL_TEMPERATURE = 50.0
+INITIAL_WATER       = 20.0   # low — below safe zone (50-80), forces agents to act
+INITIAL_FOOD        = 20.0   # low — 1.0/step drain means food crisis without farms
+INITIAL_OXYGEN      = 20.0   # low — needs forests quickly
+INITIAL_TEMPERATURE = 72.0   # slightly high — forces forests to cool planet
 
 # --- Planet meter target ranges ---
 METER_OPTIMAL_LOW  = 50.0   # water, food, oxygen
@@ -53,8 +53,8 @@ HIGH_THRESHOLD = 66.6
 
 # --- Simulation rates ---
 WATER_FLOW_RATE        = 1.5   # how fast water spreads to neighbors
-CROP_GROWTH_RATE       = 1     # turns per growth stage
-FOREST_MATURATION_TURNS = 4   # turns for a forest to reach maturity
+CROP_GROWTH_RATE       = 3     # turns per growth stage (9 steps to fully mature)
+FOREST_MATURATION_TURNS = 3   # turns for a forest to reach maturity (9 steps total)
 TEMP_CHANGE_RATE       = 0.5  # degrees changed per farm/forest/solar per turn
 
 # --- Action costs (eco points) ---

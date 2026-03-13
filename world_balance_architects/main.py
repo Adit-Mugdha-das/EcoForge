@@ -67,19 +67,30 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
     current    = world.current_agent
     agent      = agents[current]
 
-    # Agent chooses its best action
-    action, r, c = agent.choose_action(world)
+    # Agent chooses its best action — guarded so a crash doesn't kill pygame
+    try:
+        action, r, c = agent.choose_action(world)
+    except Exception as exc:
+        print(f"  [WARN] Agent {current} choose_action raised: {exc} — skipping turn")
+        action, r, c = None, -1, -1
 
     if action is None:
-        # No valid moves — agent passes this turn
+        # No valid moves (or error above) — agent passes this turn
         world.log_action(f"Agent {current} ({agent.name}): no valid moves")
     else:
-        from engine.actions import apply_action
-        log = apply_action(world, current, action, r, c)
-        print(f"  {log}")
+        try:
+            from engine.actions import apply_action
+            log = apply_action(world, current, action, r, c)
+            print(f"  {log}")
+        except Exception as exc:
+            print(f"  [WARN] Agent {current} apply_action raised: {exc} — skipping turn")
+            world.log_action(f"Agent {current} ({agent.name}): action failed")
 
     # Simulate the world after this agent's action
-    simulate(world)
+    try:
+        simulate(world)
+    except Exception as exc:
+        print(f"  [WARN] simulate() raised: {exc} — world state may be inconsistent")
 
     # Switch active agent
     world.switch_agent()
@@ -128,12 +139,13 @@ def main():
     renderer      = Renderer(screen)
     game_over     = False
     end_reason    = None
-    auto_play     = False
+    auto_play     = True          # starts playing immediately on launch
     auto_delay_ms = AUTO_PLAY_DELAY_MS
     last_auto_ms  = 0
 
     world.print_grid()
-    print("Controls: SPACE=step  A=auto-play  R=reset  +/-=speed  ESC=quit\n")
+    print("Game started — agents are playing automatically.")
+    print("Controls: SPACE=step  A=pause/resume  R=reset  +/-=speed  ESC=quit\n")
 
     # ── Main loop ─────────────────────────────────────────────────────────────
     running = True
@@ -151,23 +163,23 @@ def main():
                 if event.key == pygame.K_ESCAPE:
                     running = False
 
-                # Toggle auto-play
+                # Toggle auto-play pause/resume
                 elif event.key == pygame.K_a:
                     auto_play = not auto_play
-                    print(f"Auto-play: {'ON' if auto_play else 'OFF'}")
+                    print(f"Auto-play: {'RESUMED' if auto_play else 'PAUSED'}")
 
                 # Manual step
                 elif event.key == pygame.K_SPACE and not game_over:
                     game_over, end_reason = run_agent_turn(world, agents)
 
-                # Reset
+                # Reset — starts a brand new game, auto-play resumes
                 elif event.key == pygame.K_r:
                     world      = World()
                     game_over  = False
                     end_reason = None
-                    auto_play  = False
+                    auto_play  = True
                     world.print_grid()
-                    print("Game reset.\n")
+                    print("Game reset — agents playing again.\n")
 
                 # Speed up / slow down auto-play
                 elif event.key in (pygame.K_EQUALS, pygame.K_PLUS):
