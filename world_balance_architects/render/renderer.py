@@ -213,6 +213,14 @@ class Renderer:
             )
         y += 20
 
+        # ---- Population ----
+        pop_color = (140, 210, 160)   # soft green
+        pop_txt = self.font_sm.render(
+            f"Population:  {world.population:.0f}", True, pop_color
+        )
+        self.screen.blit(pop_txt, (x, y))
+        y += 18
+
         # Divider
         pygame.draw.line(self.screen, UI_BORDER_COLOR, (x, y), (x + pw, y))
         y += 10

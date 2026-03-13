@@ -78,6 +78,9 @@ class World:
             AGENT_B: STARTING_ECO_POINTS,
         }
 
+        # Planet population (0–200) — grows with food/oxygen, consumes all resources
+        self.population = 50.0
+
         # Per-agent scores (accumulated over the game)
         self.scores = {
             AGENT_A: 0.0,

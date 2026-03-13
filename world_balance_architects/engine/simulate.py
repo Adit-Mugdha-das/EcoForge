@@ -150,6 +150,7 @@ def _update_global_meters(world):
     farm_count          = 0
     mature_farm_count   = 0
     solar_count         = 0
+    forest_count        = 0
     forest_maturity_sum = 0
     water_coverage      = 0
 
@@ -167,6 +168,7 @@ def _update_global_meters(world):
             elif cell.terrain == TERRAIN_SOLAR:
                 solar_count += 1
             elif cell.terrain == TERRAIN_FOREST:
+                forest_count += 1
                 forest_maturity_sum += cell.forest_maturity
             if cell.water > 0:
                 water_coverage += 1
@@ -174,7 +176,7 @@ def _update_global_meters(world):
     # ---- Derived cross-meter effects ----
 
     # Flooding: excess water (>80) drains strongly — runoff + evaporation
-    flood_drain = max(0.0, world.water_level - 80) * 0.15   # was 0.08
+    flood_drain = max(0.0, world.water_level - 80) * 0.15
 
     # Heat evaporation: high temperature dries out the planet
     heat_evap = max(0.0, world.temperature - 70) * 0.06
@@ -182,72 +184,93 @@ def _update_global_meters(world):
     # Food spoilage: excess food (>80) rots quickly
     food_spoilage = max(0.0, world.food - 80) * 0.20
 
-    # Population eats more when food is abundant
-    population_consumption = 1.0 + max(0.0, world.food - 50) * 0.03
-
     # Oxygen self-regulation: excess oxygen (>80) dissipates fast
-    oxygen_bleed = max(0.0, world.oxygen - 80) * 0.20
+    oxygen_bleed = max(0.0, world.oxygen - 80) * 0.25
 
-    # Crop heat stress: farms produce less food when temperature is very high
+    # Excess oxygen causes atmospheric oxidation → slight warming
+    oxygen_heat = max(0.0, world.oxygen - 80) * 0.04
+
+    # Heat decomposition: high temperature breaks down organic matter → drains oxygen
+    heat_decomp = max(0.0, world.temperature - 65) * 0.06
+
+    # ---- Population dynamics ----
+    # Population grows when food and oxygen are good, shrinks under stress.
+    # This is the main ecosystem self-regulator:
+    #   high food → population grows → they eat more → food comes down
+    #   low food  → population shrinks → less eating → food recovers
+    pop_change = (world.food - 50) * 0.12   # grows fast with food abundance
+    if world.oxygen < 25:
+        pop_change -= 4.0    # suffocation — oxygen too low to breathe
+    if world.oxygen < 40:
+        pop_change -= 1.5    # low oxygen stress
+    if world.temperature > 75:
+        pop_change -= 3.0    # extreme heat kills off population
+    if world.temperature > 65:
+        pop_change -= 1.0    # heat stress reduces growth
+    if world.water_level < 20:
+        pop_change -= 2.0    # drought kills population
+    world.population = max(5.0, min(200.0, world.population + pop_change))
+
+    # Population consumes food, oxygen, and water proportionally to their size
+    food_by_pop   = world.population * 0.04   # eating   (2.0/step at pop=50)
+    oxygen_by_pop = world.population * 0.02   # breathing (1.0/step at pop=50)
+    water_by_pop  = world.population * 0.01   # drinking  (0.5/step at pop=50)
+
+    # Crop heat/flood stress
     if world.temperature > 75:
         farm_efficiency = 0.4    # severe heat stress
     elif world.temperature > 65:
         farm_efficiency = 0.7    # moderate heat stress
     else:
         farm_efficiency = 1.0    # normal production
-
-    # Flooding stress: too much water also reduces farm efficiency
     if world.water_level > 85:
         farm_efficiency *= 0.6   # flooded fields
 
-    # Excess oxygen causes atmospheric oxidation → slight warming
-    oxygen_heat = max(0.0, world.oxygen - 80) * 0.04
-
     # ---- Water level delta ----
+    # Forests transpire moisture back into the ecosystem (water cycle)
+    forest_transpiration = forest_count * 0.05
     water_delta = (
-        river_count      * 0.2    # rivers refill water
-        + reservoir_count * 0.6   # reservoirs amplify water
-        - farm_count      * 0.4   # farms need irrigation
-        - 0.8                     # passive evaporation
-        - flood_drain             # strong drain when flooded (>80)
-        - heat_evap               # extra drain in extreme heat
+        river_count          * 0.2    # rivers refill water
+        + reservoir_count    * 0.6    # reservoirs amplify water
+        + forest_transpiration         # forests release moisture (water cycle)
+        - farm_count         * 0.4    # farms need irrigation
+        - water_by_pop                 # population drinks/uses water
+        - 0.8                          # passive evaporation
+        - flood_drain                  # strong drain when flooded (>80)
+        - heat_evap                    # extra drain in extreme heat
     )
     world.water_level = _clamp(world.water_level + water_delta)
 
     # ---- Food delta ----
-    # Passive farm production is intentionally low — agents must actively HARVEST
-    # to get big food bursts. This prevents food from silently capping at 100.
     food_delta = (
-        mature_farm_count * 0.8 * farm_efficiency  # low steady drip (harvest is the main income)
-        - population_consumption                    # population eats more when food is high
-        - food_spoilage                             # food rots fast when too abundant (>80)
+        mature_farm_count * 0.8 * farm_efficiency  # steady farm drip
+        - food_by_pop                               # population eats — scales with population
+        - food_spoilage                             # excess food rots (>80)
     )
     world.food = _clamp(world.food + food_delta)
 
     # ---- Oxygen delta ----
-    # Count forest tiles for base oxygen (even young forests help a little)
-    forest_count = sum(
-        1 for r in range(GRID_HEIGHT) for c in range(GRID_WIDTH)
-        if world.grid[r][c].terrain == TERRAIN_FOREST
-    )
     oxygen_delta = (
-        forest_count        * 0.2   # base oxygen from any forest (even maturity 0)
-        + forest_maturity_sum * 0.08 # bonus from mature forests (kept low — bleed handles excess)
-        - farm_count  * 0.05         # agriculture slightly reduces oxygen
-        - solar_count * 0.1          # industrial panels consume oxygen
-        - 0.3                        # passive atmospheric drain
-        - oxygen_bleed               # excess oxygen dissipates fast (>80)
+        forest_count          * 0.2   # base oxygen from any forest
+        + forest_maturity_sum * 0.08  # bonus from mature forests
+        - farm_count          * 0.05  # agriculture slightly reduces oxygen
+        - solar_count         * 0.1   # industrial panels consume oxygen
+        - oxygen_by_pop               # population breathes — scales with population
+        - 0.3                         # passive atmospheric drain
+        - heat_decomp                 # high temperature → decomposition → O2 drain
+        - oxygen_bleed                # excess oxygen dissipates (>80)
     )
     world.oxygen = _clamp(world.oxygen + oxygen_delta)
 
     # ---- Temperature delta ----
-    # Forest cooling is context-sensitive: stronger when hot, weaker when cold
+    # Forest cooling is context-sensitive: stronger when hot, zero when cold.
+    # Forests do not cool what is already cold — they insulate rather than chill.
     if world.temperature > TEMP_OPTIMAL_MAX:
-        forest_cooling = forest_maturity_sum * 0.12
+        forest_cooling = forest_maturity_sum * 0.10   # active cooling in heat
     elif world.temperature < TEMP_OPTIMAL_MIN:
-        forest_cooling = forest_maturity_sum * 0.03
+        forest_cooling = 0.0                          # no cooling when already cold
     else:
-        forest_cooling = forest_maturity_sum * 0.07
+        forest_cooling = forest_maturity_sum * 0.05   # gentle damping in optimal range
 
     temp_delta = (
         + 0.5                    # passive greenhouse warming
