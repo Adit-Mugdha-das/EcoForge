@@ -7,7 +7,7 @@
 #   DQN:         neural network takes 9 continuous features → 8 action values
 #
 # Network architecture:
-#   Input  (9)  → Hidden (128) → Hidden (128) → Output (8 Q-values)
+#   Input  (11)  → Hidden (128) → Hidden (128) → Output (8 Q-values)
 #
 # Key DQN techniques used:
 #   1. Experience Replay   — store past transitions, sample random batches
@@ -17,9 +17,10 @@
 #   3. Gradient Clipping   — caps gradients at 1.0 (training stability)
 #   4. Huber Loss          — less sensitive to outliers than MSE
 #
-# State vector (9 features, all normalized to [0, 1]):
+# State vector (11 features, all normalized to [0, 1]):
 #   water, food, oxygen, temperature, population,
-#   stability, own_eco, own_cells, opp_cells
+#   stability, own_eco, own_cells, opp_cells,
+#   opp_eco, score_diff
 # =============================================================================
 
 import sys
@@ -51,7 +52,7 @@ DQN_ACTION_INDEX = {
     'Adjust Resource Allocation': 7,
 }
 DQN_N_ACTIONS  = 8
-DQN_STATE_SIZE = 9
+DQN_STATE_SIZE = 11   # was 9 — added opp_eco and score_diff features
 
 
 # =============================================================================
@@ -60,7 +61,7 @@ DQN_STATE_SIZE = 9
 
 class QNetwork(nn.Module):
     """
-    Fully-connected network: 9 inputs → 128 → 128 → 8 Q-values.
+    Fully-connected network: 11 inputs → 128 → 128 → 8 Q-values.
     Takes a normalized state vector; outputs one Q-value per action type.
     """
     def __init__(self, state_size: int = DQN_STATE_SIZE,
@@ -165,12 +166,19 @@ class DQNAgent(BaseAgent):
 
     def get_state_vector(self, world) -> np.ndarray:
         """
-        Build the 9-feature normalized state vector from the current world.
+        Build the 11-feature normalized state vector from the current world.
         All values scaled to roughly [0, 1] so the network trains smoothly.
+
+        Features 1-9 are environmental + territorial.
+        Features 10-11 are competitive: opponent eco and score differential.
         """
         opponent    = self.opponent
         agent_cells = len(world.get_agent_cells(self.agent_id))
         opp_cells   = len(world.get_agent_cells(opponent))
+
+        # Score differential clipped to [-1, 1]: positive = we're winning
+        score_diff = world.scores[self.agent_id] - world.scores[opponent]
+        score_diff_norm = max(-1.0, min(1.0, score_diff / 200.0))
 
         return np.array([
             world.water_level                        / 100.0,
@@ -178,10 +186,12 @@ class DQNAgent(BaseAgent):
             world.oxygen                             / 100.0,
             world.temperature                        / 100.0,
             world.population                         / 200.0,
-            world.stability,                                   # already 0–1
+            world.stability,                                   # already 0-1
             world.eco_points[self.agent_id]          / 99.0,
             agent_cells                              / 100.0,
             opp_cells                                / 100.0,
+            world.eco_points[opponent]               / 99.0,  # NEW: opp eco spend capacity
+            score_diff_norm,                                   # NEW: who is winning
         ], dtype=np.float32)
 
     # ── Action selection ──────────────────────────────────────────────────────
@@ -215,19 +225,24 @@ class DQNAgent(BaseAgent):
                 best_val  = q_vals[idx]
                 best_move = (action, r, c)
 
-        # Eco-hoarding override: if eco is high and the network chose the free
-        # "Adjust Resource Allocation" action, force it to pick the best
-        # building action instead so eco gets spent on actual structures.
+        # Eco-hoarding override: when eco is high and the model picks a cheap
+        # action (cost < 4), force it to pick the best expensive action instead.
+        #
+        # Why cost < 4?
+        #   Adjust (0), Harvest Crop (1), Clear Forest (2), Canal/Forest (3)
+        #   all cost <= eco income (+2/turn), so eco never drains — it grows.
+        #   Forest/Farm (4) and Solar (8) / Reservoir (10) actually drain eco.
+        #
+        # Threshold lowered from 60 → 40 so eco never has a chance to pile up.
         eco = world.eco_points[self.agent_id]
-        if eco > 60 and best_move[0].name == 'Adjust Resource Allocation':
-            building_moves = [
-                (a, r, c) for a, r, c in moves
-                if a.name != 'Adjust Resource Allocation'
+        if eco > 40 and best_move[0].cost < 4:
+            expensive_moves = [
+                (a, r, c) for a, r, c in moves if a.cost >= 4
             ]
-            if building_moves:
+            if expensive_moves:
                 best_val  = float('-inf')
-                best_move = building_moves[0]
-                for action, r, c in building_moves:
+                best_move = expensive_moves[0]
+                for action, r, c in expensive_moves:
                     idx = DQN_ACTION_INDEX.get(action.name, 0)
                     if q_vals[idx] > best_val:
                         best_val  = q_vals[idx]
@@ -305,10 +320,19 @@ class DQNAgent(BaseAgent):
         print(f"[DQN] Model saved to {path}  (steps: {self.steps})")
 
     def load(self, path: str):
-        """Load previously saved weights; switch to near-exploitation mode."""
+        """Load previously saved weights; switch to near-exploitation mode.
+        If the saved model has a different architecture (e.g. old 9-input vs
+        new 11-input), raises a clear error asking the user to retrain."""
         data = torch.load(path, weights_only=False)
-        self.online_net.load_state_dict(data['online_net'])
-        self.target_net.load_state_dict(data['target_net'])
+        try:
+            self.online_net.load_state_dict(data['online_net'])
+            self.target_net.load_state_dict(data['target_net'])
+        except RuntimeError as exc:
+            raise RuntimeError(
+                f"[DQN] Cannot load '{path}': model architecture changed "
+                f"(state size is now {DQN_STATE_SIZE}). "
+                "Please retrain: python train_dqn.py"
+            ) from exc
         self.epsilon = max(self.epsilon_min, data.get('epsilon', self.epsilon_min))
         self.steps   = data.get('steps', 0)
         self.trained = data.get('trained', True)

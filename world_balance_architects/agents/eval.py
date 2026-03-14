@@ -96,13 +96,19 @@ def evaluate_state(world, agent: str) -> float:
 
 def compute_reward(old_stability: float, world, agent: str) -> float:
     """
-    Reward signal for Q-Learning after one action + simulation step.
+    Reward signal for Q-Learning / DQN after one action + simulation step.
     Combines:
-      - Environmental change: new_stability - old_stability  (PDF: "environment improves or worsens")
+      - Environmental change: new_stability - old_stability
       - Bonus for maintaining stable range
       - Penalty for collapse proximity
-      - Small bonus for building strategic assets
+      - Temperature optimality (mirrors evaluate_state highest-weight component)
+      - Resource optimality (water + food + oxygen meter scores)
+      - Score differential vs opponent (competitive signal)
+      - Territory control (cell count advantage)
+      - Asset value (encourages building)
+      - Eco hoarding penalty
     """
+    opponent      = AGENT_B if agent == AGENT_A else AGENT_A
     new_stability = world.stability
     delta         = new_stability - old_stability
 
@@ -121,8 +127,21 @@ def compute_reward(old_stability: float, world, agent: str) -> float:
     if new_stability < STABILITY_COLLAPSE:
         reward -= 20.0
 
+    # Temperature optimality — highest-weight signal in evaluate_state (x12),
+    # previously missing entirely from DQN reward.
+    # Peaks at +1.5 in optimal range (40-60), down to -0.75 at extremes.
+    reward += _score_temperature(world.temperature) * 1.5
+
+    # Resource optimality — water, food, oxygen all in healthy range (50-80).
+    # Previously DQN only felt resources indirectly via stability.
+    resource_score = (
+        _score_meter(world.water_level)
+        + _score_meter(world.food)
+        + _score_meter(world.oxygen)
+    ) / 3.0
+    reward += resource_score * 1.5
+
     # Population health signal — tiered curve that penalizes both extremes.
-    # Overpopulation (>150) now strains all resources, so it no longer earns a bonus.
     if world.population >= 150:
         reward -= 1.5   # overpopulation zone — resources draining faster
     elif world.population >= 100:
@@ -132,13 +151,21 @@ def compute_reward(old_stability: float, world, agent: str) -> float:
     elif world.population < 20:
         reward -= 8.0   # ecosystem failure — severe crash
 
-    # Small positive for owning assets (encourages building)
-    reward += _asset_value(world, agent) * 0.1
+    # Score differential vs opponent — evaluate_state weights this x5.0;
+    # without it DQN has no competitive awareness (it doesn't know it's losing).
+    reward += (world.scores[agent] - world.scores[opponent]) * 0.15
+
+    # Territory control — cell count advantage (evaluate_state weights x2.0).
+    my_cells  = len(world.get_agent_cells(agent))
+    opp_cells = len(world.get_agent_cells(opponent))
+    reward += (my_cells - opp_cells) * 0.12
+
+    # Asset value — boosted from 0.1 to 0.2 (still conservative vs
+    # evaluate_state's x1.5, but much less blind to building value).
+    reward += _asset_value(world, agent) * 0.2
 
     # Eco hoarding penalty — high unspent eco means the agent is not building.
-    # Without this, DQN learns to spam free actions (Adjust Resource Allocation)
-    # and let the world evolve on its own instead of actively constructing.
-    #   eco=60 → no penalty   eco=80 → -1.0   eco=99 → -1.95
+    # eco=60 -> no penalty   eco=80 -> -1.0   eco=99 -> -1.95
     eco = world.eco_points[agent]
     if eco > 60:
         reward -= (eco - 60) * 0.05

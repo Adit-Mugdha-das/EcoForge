@@ -223,7 +223,11 @@ def build_agent(agent_type: str, agent_id: str):
         agent = DQNAgent(agent_id)
         path  = _dqn_model_path(agent_id)
         if os.path.exists(path):
-            agent.load(path)
+            try:
+                agent.load(path)
+            except RuntimeError as exc:
+                print(f"[DQN] WARNING: {exc}")
+                print(f"[DQN] Starting untrained — run: python train_dqn.py --agent {agent_id}")
         else:
             print(f"[DQN] No saved model found for Agent {agent_id}.")
             print(f"[DQN] Run:  python train_dqn.py --agent {agent_id}")
