@@ -181,8 +181,10 @@ def _update_global_meters(world):
     # Heat evaporation: high temperature dries out the planet
     heat_evap = max(0.0, world.temperature - 70) * 0.06
 
-    # Food spoilage: excess food (>80) rots quickly
-    food_spoilage = max(0.0, world.food - 80) * 0.30
+    # Food spoilage: food starts rotting at 72 (8 pts inside optimal), not at 80.
+    # This prevents food from spiking to 85+ when population crashes and farm
+    # production far outpaces the reduced consumption floor.
+    food_spoilage = max(0.0, world.food - 72) * 0.30
 
     # Oxygen self-regulation: excess oxygen (>80) dissipates faster
     # Rate raised 0.40→0.65: at oxygen=82 with 10 forests bleed now exceeds production
@@ -190,6 +192,12 @@ def _update_global_meters(world):
 
     # Excess oxygen causes atmospheric oxidation → slight warming
     oxygen_heat = max(0.0, world.oxygen - 80) * 0.04
+
+    # Heat radiation: above 80°, planet radiates excess energy to space.
+    # Equivalent to oxygen_bleed / food_spoilage — temperature finally has self-regulation.
+    # Coefficient 0.175 → equilibrium at temp≈92 with 3 solar + 4 farms + no forests.
+    # Forests pull it much lower; this is a safety net, not a replacement for forests.
+    heat_radiation = max(0.0, world.temperature - 80) * 0.175
 
     # Heat decomposition: high temperature breaks down organic matter → drains oxygen
     heat_decomp = max(0.0, world.temperature - 65) * 0.06
@@ -200,10 +208,23 @@ def _update_global_meters(world):
     wildfire_drain = max(0.0, world.oxygen - 85) * forest_count * 0.04
 
     # ---- Population dynamics ----
-    # Logistic-style growth: food drives it, stress factors drag it down.
-    # Growth coefficient lowered 0.12→0.08 so population changes more gradually.
-    # Change is capped at ±2.5/step (was only -4 floor) to prevent wild swings.
-    pop_change = (world.food - 50) * 0.08   # gentler slope — was 0.12
+    # Base growth is food-driven. Logistic scaling is applied ONLY to the growth
+    # direction (positive pop_change): growth slows as population approaches the
+    # carrying capacity (200). Crashes are left unscaled — high population with
+    # scarce resources should crash just as fast regardless of density.
+    base_growth = (world.food - 50) * 0.08
+    # Ecosystem thriving bonus: when all four meters are simultaneously in optimal range,
+    # the planet is healthy enough to support faster reproduction — realistic overpopulation
+    # scenario when food, water, oxygen, and temperature are all ideal.
+    # Added BEFORE the logistic brake so it also scales down near carrying capacity.
+    if (METER_OPTIMAL_LOW  <= world.water_level  <= METER_OPTIMAL_HIGH and
+            METER_OPTIMAL_LOW  <= world.food        <= METER_OPTIMAL_HIGH and
+            METER_OPTIMAL_LOW  <= world.oxygen      <= METER_OPTIMAL_HIGH and
+            TEMP_OPTIMAL_MIN   <= world.temperature <= TEMP_OPTIMAL_MAX):
+        base_growth += 0.4
+    if base_growth > 0:
+        base_growth *= (1.0 - world.population / 200.0)   # logistic brake on growth
+    pop_change = base_growth
     if world.oxygen < 25:
         pop_change -= 2.5    # suffocation (softened from -4.0 — early game is harsh enough)
     elif world.oxygen < 40:
@@ -215,8 +236,8 @@ def _update_global_meters(world):
     if world.water_level < 15:
         pop_change -= 1.5    # severe drought
     elif world.water_level < 30:
-        pop_change -= 0.6    # mild water stress (new tier)
-    pop_change = max(-2.5, min(2.5, pop_change))   # symmetric cap — no more instant crashes
+        pop_change -= 0.6    # mild water stress
+    pop_change = max(-2.5, min(2.5, pop_change))   # symmetric cap
     world.population = max(5.0, min(200.0, world.population + pop_change))
 
     # Population consumes food, oxygen, and water proportionally to their size.
@@ -275,9 +296,12 @@ def _update_global_meters(world):
     world.oxygen = _clamp(world.oxygen + oxygen_delta)
 
     # ---- Temperature delta ----
-    # Forest cooling is context-sensitive: stronger when hot, zero when cold.
-    # Forests do not cool what is already cold — they insulate rather than chill.
-    if world.temperature > TEMP_OPTIMAL_MAX:
+    # Forest cooling is context-sensitive: strongest in extreme heat, zero when cold.
+    # Above 80° an emergency tier kicks in — double the cooling rate — because
+    # transpiration and albedo effects are much stronger under severe heat stress.
+    if world.temperature > 80:
+        forest_cooling = forest_maturity_sum * 0.20   # emergency: double rate above 80°
+    elif world.temperature > TEMP_OPTIMAL_MAX:
         forest_cooling = forest_maturity_sum * 0.10   # active cooling in heat
     elif world.temperature < TEMP_OPTIMAL_MIN:
         forest_cooling = 0.0                          # no cooling when already cold
@@ -291,6 +315,7 @@ def _update_global_meters(world):
         + oxygen_heat            # excess oxygen causes oxidative warming
         - forest_cooling         # context-sensitive forest cooling
         - water_coverage * 0.01  # wetlands cool slightly
+        - heat_radiation         # planetary heat radiation — self-regulation above 80
     )
     world.temperature = _clamp(world.temperature + temp_delta)
 
