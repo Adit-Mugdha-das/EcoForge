@@ -221,7 +221,12 @@ def _update_global_meters(world):
             METER_OPTIMAL_LOW  <= world.food        <= METER_OPTIMAL_HIGH and
             METER_OPTIMAL_LOW  <= world.oxygen      <= METER_OPTIMAL_HIGH and
             TEMP_OPTIMAL_MIN   <= world.temperature <= TEMP_OPTIMAL_MAX):
-        base_growth += 0.4
+        base_growth += 0.4   # thriving: all meters perfectly balanced
+    elif (world.food > 45 and
+            world.water_level > 38 and
+            world.oxygen > 38 and
+            world.temperature < 72):
+        base_growth += 0.2   # stable: conditions are decent, no critical shortages
     if base_growth > 0:
         base_growth *= (1.0 - world.population / 200.0)   # logistic brake on growth
     pop_change = base_growth
@@ -270,8 +275,10 @@ def _update_global_meters(world):
         farm_efficiency = 0.7    # moderate heat stress
     else:
         farm_efficiency = 1.0    # normal production
-    if world.water_level > 85:
-        farm_efficiency *= 0.6   # flooded fields
+    if world.water_level > 92:
+        farm_efficiency *= 0.35  # severe flooding — crops nearly submerged, major damage
+    elif world.water_level > 85:
+        farm_efficiency *= 0.6   # moderate flooding
 
     # ---- Water level delta ----
     # Forests transpire moisture back into the ecosystem (water cycle)
