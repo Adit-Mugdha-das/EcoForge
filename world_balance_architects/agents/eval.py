@@ -140,19 +140,20 @@ def compute_reward(old_stability: float, world, agent: str) -> float:
 def _score_meter(val: float, low: float = METER_OPTIMAL_LOW,
                  high: float = METER_OPTIMAL_HIGH) -> float:
     """
-    Score a resource meter on -0.1 to 1.0.
-    Matches world.py _score_meter exactly:
+    Score a resource meter on -0.5 to 1.0.
       1.0  = in optimal range (50–80)
-      0.0  = at val=95 (high side) or val=0 (low side)
-      -0.1 = at val=100 — slight negative, oversaturation actively hurts
+      0.5  = at val=85 (just over optimal — noticeable penalty)
+      0.0  = at val=90
+     -0.5  = at val=95+ (severe oversaturation actively hurts)
     """
     if low <= val <= high:
         return 1.0
     elif val < low:
         return max(0.0, val / low)
     else:
-        # Steeper penalty on high side: 0 at val=95, -0.1 at val=100
-        return max(-0.1, 1.0 - (val - high) / 15.0)
+        # Steeper penalty on high side: hits 0 at val=90, -0.5 at val=95+
+        # (previously 0 at val=95, -0.1 at 100 — too mild)
+        return max(-0.5, 1.0 - (val - high) / 10.0)
 
 
 def _score_temperature(val: float) -> float:
@@ -216,10 +217,11 @@ def _asset_value(world, agent: str) -> float:
     value = 0.0
 
     # Context multipliers — asset value drops once the meter it fills exceeds 60.
-    # Agents should stop building water/food/oxygen infra well before hitting 100.
-    water_mult = 1.0 if world.water_level < 60 else max(0.0, 1.0 - (world.water_level - 60) / 30)
-    food_mult  = 1.0 if world.food < 60        else max(0.0, 1.0 - (world.food - 60) / 30)
-    oxy_mult   = 1.0 if world.oxygen < 60      else max(0.0, 1.0 - (world.oxygen - 60) / 30)
+    # For oxygen: divisor 20 so crossover to NEGATIVE is exactly at oxygen=80
+    # (METER_OPTIMAL_HIGH). Forests become a liability above 80 → agents use clear_forest.
+    water_mult = 1.0 if world.water_level < 60 else max(0.0,  1.0 - (world.water_level - 60) / 30)
+    food_mult  = 1.0 if world.food < 60        else max(0.0,  1.0 - (world.food - 60) / 30)
+    oxy_mult   = 1.0 if world.oxygen < 60      else max(-1.0, 1.0 - (world.oxygen - 60) / 20.0)
 
     for _, cell in world.get_agent_cells(agent):
         if cell.terrain == TERRAIN_FOREST:

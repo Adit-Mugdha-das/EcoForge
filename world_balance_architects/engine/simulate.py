@@ -185,14 +185,19 @@ def _update_global_meters(world):
     food_spoilage = max(0.0, world.food - 80) * 0.30
 
     # Oxygen self-regulation: excess oxygen (>80) dissipates faster
-    # Rate raised 0.25→0.40 so equilibrium with typical forests stays inside optimal range
-    oxygen_bleed = max(0.0, world.oxygen - 80) * 0.40
+    # Rate raised 0.40→0.65: at oxygen=82 with 10 forests bleed now exceeds production
+    oxygen_bleed = max(0.0, world.oxygen - 80) * 0.65
 
     # Excess oxygen causes atmospheric oxidation → slight warming
     oxygen_heat = max(0.0, world.oxygen - 80) * 0.04
 
     # Heat decomposition: high temperature breaks down organic matter → drains oxygen
     heat_decomp = max(0.0, world.temperature - 65) * 0.06
+
+    # Wildfire atmospheric drain: when oxygen oversaturates above 85, organic fuel
+    # ignites more easily — proportional to forest density (more fuel = more burn).
+    # This is deterministic for agent lookahead (no random burns here).
+    wildfire_drain = max(0.0, world.oxygen - 85) * forest_count * 0.04
 
     # ---- Population dynamics ----
     # Logistic-style growth: food drives it, stress factors drag it down.
@@ -265,6 +270,7 @@ def _update_global_meters(world):
         - 0.3                         # passive atmospheric drain
         - heat_decomp                 # high temperature → decomposition → O2 drain
         - oxygen_bleed                # excess oxygen dissipates (>80)
+        - wildfire_drain              # high O2 + dense forests → combustion drain (>85)
     )
     world.oxygen = _clamp(world.oxygen + oxygen_delta)
 
