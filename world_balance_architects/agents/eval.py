@@ -182,10 +182,11 @@ def _asset_value(world, agent: str) -> float:
     """
     value = 0.0
 
-    # Context multipliers — an asset is less valuable if the meter it fills is too full
-    water_mult = 1.0 if world.water_level < 75 else max(0.1, 1.0 - (world.water_level - 75) / 25)
-    food_mult  = 1.0 if world.food < 75        else max(0.1, 1.0 - (world.food - 75) / 25)
-    oxy_mult   = 1.0 if world.oxygen < 75      else max(0.1, 1.0 - (world.oxygen - 75) / 25)
+    # Context multipliers — asset value drops once the meter it fills exceeds 60.
+    # Agents should stop building water/food/oxygen infra well before hitting 100.
+    water_mult = 1.0 if world.water_level < 60 else max(0.0, 1.0 - (world.water_level - 60) / 30)
+    food_mult  = 1.0 if world.food < 60        else max(0.0, 1.0 - (world.food - 60) / 30)
+    oxy_mult   = 1.0 if world.oxygen < 60      else max(0.0, 1.0 - (world.oxygen - 60) / 30)
 
     for _, cell in world.get_agent_cells(agent):
         if cell.terrain == TERRAIN_FOREST:

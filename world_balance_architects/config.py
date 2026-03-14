@@ -21,7 +21,7 @@ UI_PANEL_WIDTH    = SCREEN_WIDTH - UI_PANEL_X  # 300
 
 # --- Game ---
 MAX_TURNS             = 50
-STARTING_ECO_POINTS   = 30
+STARTING_ECO_POINTS   = 25
 
 # --- Terrain type constants ---
 TERRAIN_LAND      = 'land'
@@ -60,7 +60,7 @@ TEMP_CHANGE_RATE       = 0.5  # degrees changed per farm/forest/solar per turn
 # --- Action costs (eco points) ---
 ACTION_COSTS = {
     'build_canal':        3,
-    'place_reservoir':    6,
+    'place_reservoir':    10,   # raised from 6 — expensive, agents should build sparingly
     'plant_forest':       4,
     'clear_forest':       2,
     'plant_crop':         3,

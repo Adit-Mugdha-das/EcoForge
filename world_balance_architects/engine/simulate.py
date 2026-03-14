@@ -235,7 +235,7 @@ def _update_global_meters(world):
     forest_transpiration = forest_count * 0.05
     water_delta = (
         river_count          * 0.2    # rivers refill water
-        + reservoir_count    * 0.6    # reservoirs amplify water
+        + reservoir_count    * 0.3    # reservoirs amplify water (was 0.6 — halved to prevent flooding)
         + forest_transpiration         # forests release moisture (water cycle)
         - farm_count         * 0.4    # farms need irrigation
         - water_by_pop                 # population drinks/uses water
