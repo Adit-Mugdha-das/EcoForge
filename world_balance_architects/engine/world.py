@@ -288,11 +288,18 @@ class World:
             if val <= TEMP_OPTIMAL_MAX: return 1   # optimal
             return 2                                # too hot
 
+        def cat_pop(val):
+            # Population: low / normal / overpopulation
+            if val < 40:  return 0   # low — ecosystem struggling
+            if val < 100: return 1   # normal range
+            return 2                 # overpopulation — resource strain
+
         return (
             cat(self.water_level),
             cat(self.food),
             cat(self.oxygen),
             cat_temp(self.temperature),
+            cat_pop(self.population),   # 3 tiers → 243 total states (was 81)
         )
 
     # -------------------------------------------------------------------------

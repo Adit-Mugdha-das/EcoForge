@@ -121,11 +121,16 @@ def compute_reward(old_stability: float, world, agent: str) -> float:
     if new_stability < STABILITY_COLLAPSE:
         reward -= 20.0
 
-    # Population health signal — growing pop means ecosystem is working
-    if world.population >= 100:
-        reward += 2.0
+    # Population health signal — tiered curve that penalizes both extremes.
+    # Overpopulation (>150) now strains all resources, so it no longer earns a bonus.
+    if world.population >= 150:
+        reward -= 1.5   # overpopulation zone — resources draining faster
+    elif world.population >= 100:
+        reward += 1.0   # healthy high pop — not yet straining
+    elif world.population >= 50:
+        reward += 2.0   # thriving mid-range — best zone
     elif world.population < 20:
-        reward -= 8.0   # population crash = ecosystem failure
+        reward -= 8.0   # ecosystem failure — severe crash
 
     # Small positive for owning assets (encourages building)
     reward += _asset_value(world, agent) * 0.1

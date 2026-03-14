@@ -20,6 +20,7 @@ AGENT_B_TYPE = 'montecarlo'
 
 import pygame
 import sys
+import os
 
 from config import *
 from engine.world import World
@@ -27,7 +28,8 @@ from engine.simulate import simulate
 from render.renderer import Renderer
 from agents.minimax import MinimaxAgent
 from agents.monte_carlo import MonteCarloAgent
-from agents.q_learning import QLearningAgent
+from agents.q_learning import QLearningAgent, ACTION_INDEX
+from agents.eval import compute_reward
 
 
 # ── Auto-play delay in milliseconds between agent turns ──────────────────────
@@ -35,6 +37,19 @@ AUTO_PLAY_DELAY_MS  = 600     # default: one turn every 600 ms
 AUTO_PLAY_SPEED_STEP = 100    # +/- key changes delay by this amount
 AUTO_PLAY_MIN_MS     = 100
 AUTO_PLAY_MAX_MS     = 2000
+
+
+def _q_table_path(agent_id: str) -> str:
+    """Return the filename used to persist a Q-agent's table between runs."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        f"q_table_{agent_id}.json")
+
+
+def save_q_agents(agents: dict):
+    """Save Q-tables for every Q-Learning agent so online experience is kept."""
+    for agent_id, agent in agents.items():
+        if isinstance(agent, QLearningAgent):
+            agent.save(_q_table_path(agent_id))
 
 
 def build_agent(agent_type: str, agent_id: str):
@@ -49,7 +64,12 @@ def build_agent(agent_type: str, agent_id: str):
 
     elif agent_type == 'qlearning':
         agent = QLearningAgent(agent_id)
-        agent.train(episodes=TRAIN_EPISODES, verbose=True)
+        path  = _q_table_path(agent_id)
+        if os.path.exists(path):
+            agent.load(path)
+        else:
+            agent.train(episodes=TRAIN_EPISODES, verbose=True)
+            agent.save(path)
         return agent
 
     else:
@@ -67,6 +87,12 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
     current    = world.current_agent
     agent      = agents[current]
 
+    # Capture pre-action state for Q-Learning online update
+    is_qlearner   = isinstance(agent, QLearningAgent)
+    pre_state     = world.get_state_category() if is_qlearner else None
+    pre_stability = world.stability            if is_qlearner else None
+    action_idx    = None
+
     # Agent chooses its best action — guarded so a crash doesn't kill pygame
     try:
         action, r, c = agent.choose_action(world)
@@ -78,6 +104,8 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
         # No valid moves (or error above) — agent passes this turn
         world.log_action(f"Agent {current} ({agent.name}): no valid moves")
     else:
+        if is_qlearner:
+            action_idx = ACTION_INDEX.get(action.name, 0)
         try:
             from engine.actions import apply_action
             log = apply_action(world, current, action, r, c)
@@ -85,12 +113,19 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
         except Exception as exc:
             print(f"  [WARN] Agent {current} apply_action raised: {exc} — skipping turn")
             world.log_action(f"Agent {current} ({agent.name}): action failed")
+            action_idx = None   # action failed — don't update Q-table
 
     # Simulate the world after this agent's action
     try:
         simulate(world)
     except Exception as exc:
         print(f"  [WARN] simulate() raised: {exc} — world state may be inconsistent")
+
+    # Online Q-Learning update (runs after simulate so next_state reflects changes)
+    if is_qlearner and pre_state is not None and action_idx is not None:
+        reward     = compute_reward(pre_stability, world, current)
+        next_state = world.get_state_category()
+        agent.update(pre_state, action_idx, reward, next_state)
 
     # Switch active agent
     world.switch_agent()
@@ -156,11 +191,13 @@ def main():
         for event in pygame.event.get():
 
             if event.type == pygame.QUIT:
+                save_q_agents(agents)
                 running = False
 
             if event.type == pygame.KEYDOWN:
 
                 if event.key == pygame.K_ESCAPE:
+                    save_q_agents(agents)
                     running = False
 
                 # Toggle auto-play pause/resume
@@ -174,6 +211,7 @@ def main():
 
                 # Reset — starts a brand new game, auto-play resumes
                 elif event.key == pygame.K_r:
+                    save_q_agents(agents)
                     world      = World()
                     game_over  = False
                     end_reason = None
