@@ -3,7 +3,7 @@
 # =============================================================================
 #
 # An in-game selection screen lets you pick Agent A and Agent B at startup.
-# Available agents: minimax | montecarlo | qlearning
+# Available agents: minimax | montecarlo | qlearning | dqn
 #
 # Controls (in-game):
 #   SPACE      — step one agent turn manually
@@ -24,6 +24,7 @@ from render.renderer import Renderer
 from agents.minimax import MinimaxAgent
 from agents.monte_carlo import MonteCarloAgent
 from agents.q_learning import QLearningAgent, ACTION_INDEX
+from agents.dqn_agent import DQNAgent, DQN_ACTION_INDEX
 from agents.eval import compute_reward
 
 
@@ -42,6 +43,7 @@ _AGENT_OPTIONS = [
     ('minimax',    'Minimax',     'Adversarial tree search'),
     ('montecarlo', 'Monte Carlo', 'Simulation-based rollouts'),
     ('qlearning',  'Q-Learning',  'Experience & learning'),
+    ('dqn',        'DQN',         'Deep neural network RL'),
 ]
 
 
@@ -62,9 +64,9 @@ def run_selection_screen(screen, clock):
     # ── Layout ─────────────────────────────────────────────────────────────────
     COL_A_CX  = SCREEN_WIDTH // 4        # 225 — Agent A column centre
     COL_B_CX  = SCREEN_WIDTH * 3 // 4   # 675 — Agent B column centre
-    BTN_W, BTN_H = 190, 68
-    BTN_GAP      = 14
-    FIRST_BTN_Y  = 230
+    BTN_W, BTN_H = 190, 58
+    BTN_GAP      = 10
+    FIRST_BTN_Y  = 175
 
     # ── Colours ────────────────────────────────────────────────────────────────
     BG          = (15, 18, 28)
@@ -97,7 +99,7 @@ def run_selection_screen(screen, clock):
 
         # ── Divider + column headers ────────────────────────────────────────────
         pygame.draw.line(screen, C_DIV,
-                         (SCREEN_WIDTH // 2, 115), (SCREEN_WIDTH // 2, 500), 1)
+                         (SCREEN_WIDTH // 2, 115), (SCREEN_WIDTH // 2, 455), 1)
 
         ha = f_head.render("Agent A", True, C_HEAD_A)
         screen.blit(ha, (COL_A_CX - ha.get_width() // 2, 120))
@@ -142,7 +144,7 @@ def run_selection_screen(screen, clock):
                                  rect.top + 38))
 
         # ── Start button ────────────────────────────────────────────────────────
-        start_rect = pygame.Rect(SCREEN_WIDTH // 2 - 130, 520, 260, 56)
+        start_rect = pygame.Rect(SCREEN_WIDTH // 2 - 130, 465, 260, 52)
         s_hov      = start_rect.collidepoint(mx, my)
         pygame.draw.rect(screen, C_START_H if s_hov else C_START,
                          start_rect, border_radius=10)
@@ -182,11 +184,19 @@ def _q_table_path(agent_id: str) -> str:
                         f"q_table_{agent_id}.json")
 
 
-def save_q_agents(agents: dict):
-    """Save Q-tables for every Q-Learning agent so online experience is kept."""
+def _dqn_model_path(agent_id: str) -> str:
+    """Return the filename used to persist a DQN model between runs."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        f"dqn_model_{agent_id}.pt")
+
+
+def save_learners(agents: dict):
+    """Save Q-tables and DQN models so all online experience is kept."""
     for agent_id, agent in agents.items():
         if isinstance(agent, QLearningAgent):
             agent.save(_q_table_path(agent_id))
+        elif isinstance(agent, DQNAgent):
+            agent.save(_dqn_model_path(agent_id))
 
 
 def build_agent(agent_type: str, agent_id: str):
@@ -209,6 +219,17 @@ def build_agent(agent_type: str, agent_id: str):
             agent.save(path)
         return agent
 
+    elif agent_type == 'dqn':
+        agent = DQNAgent(agent_id)
+        path  = _dqn_model_path(agent_id)
+        if os.path.exists(path):
+            agent.load(path)
+        else:
+            print(f"[DQN] No saved model found for Agent {agent_id}.")
+            print(f"[DQN] Run:  python train_dqn.py --agent {agent_id}")
+            print(f"[DQN] Starting untrained — agent will explore randomly.")
+        return agent
+
     else:
         raise ValueError(f"Unknown agent type: '{agent_type}'. "
                          f"Choose from: minimax, montecarlo, qlearning")
@@ -224,10 +245,19 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
     current    = world.current_agent
     agent      = agents[current]
 
-    # Capture pre-action state for Q-Learning online update
+    # Capture pre-action state for online learning (Q-Learning and DQN)
     is_qlearner   = isinstance(agent, QLearningAgent)
-    pre_state     = world.get_state_category() if is_qlearner else None
-    pre_stability = world.stability            if is_qlearner else None
+    is_dqn        = isinstance(agent, DQNAgent)
+    is_learner    = is_qlearner or is_dqn
+
+    if is_qlearner:
+        pre_state = world.get_state_category()
+    elif is_dqn:
+        pre_state = agent.get_state_vector(world)
+    else:
+        pre_state = None
+
+    pre_stability = world.stability if is_learner else None
     action_idx    = None
 
     # Agent chooses its best action — guarded so a crash doesn't kill pygame
@@ -243,6 +273,8 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
     else:
         if is_qlearner:
             action_idx = ACTION_INDEX.get(action.name, 0)
+        elif is_dqn:
+            action_idx = DQN_ACTION_INDEX.get(action.name, 0)
         try:
             from engine.actions import apply_action
             log = apply_action(world, current, action, r, c)
@@ -258,11 +290,15 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
     except Exception as exc:
         print(f"  [WARN] simulate() raised: {exc} — world state may be inconsistent")
 
-    # Online Q-Learning update (runs after simulate so next_state reflects changes)
-    if is_qlearner and pre_state is not None and action_idx is not None:
-        reward     = compute_reward(pre_stability, world, current)
-        next_state = world.get_state_category()
-        agent.update(pre_state, action_idx, reward, next_state)
+    # Online learning update (runs after simulate so next_state reflects changes)
+    if is_learner and pre_state is not None and action_idx is not None:
+        reward = compute_reward(pre_stability, world, current)
+        if is_qlearner:
+            next_state = world.get_state_category()
+            agent.update(pre_state, action_idx, reward, next_state)
+        else:  # DQN
+            next_state = agent.get_state_vector(world)
+            agent.update(pre_state, action_idx, reward, next_state)
 
     # Switch active agent
     world.switch_agent()
@@ -335,14 +371,14 @@ def main():
             for event in pygame.event.get():
 
                 if event.type == pygame.QUIT:
-                    save_q_agents(agents)
+                    save_learners(agents)
                     pygame.quit()
                     sys.exit()
 
                 if event.type == pygame.KEYDOWN:
 
                     if event.key == pygame.K_ESCAPE:
-                        save_q_agents(agents)
+                        save_learners(agents)
                         pygame.quit()
                         sys.exit()
 
@@ -357,7 +393,7 @@ def main():
 
                     # R — save, then return to agent-selection screen
                     elif event.key == pygame.K_r:
-                        save_q_agents(agents)
+                        save_learners(agents)
                         running = False
 
                     # Speed up / slow down auto-play
