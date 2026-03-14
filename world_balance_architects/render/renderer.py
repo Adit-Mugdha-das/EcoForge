@@ -180,13 +180,13 @@ class Renderer:
 
         # ---- Planet Meters ----
         meters = [
-            ('WATER',   world.water_level,  METER_COLORS['water']),
-            ('FOOD',    world.food,          METER_COLORS['food']),
-            ('OXYGEN',  world.oxygen,        METER_COLORS['oxygen']),
-            ('TEMP',    world.temperature,   METER_COLORS['temp']),
+            ('WATER',   world.water_level,  METER_COLORS['water'],  50, 80),
+            ('FOOD',    world.food,          METER_COLORS['food'],   50, 80),
+            ('OXYGEN',  world.oxygen,        METER_COLORS['oxygen'], 50, 80),
+            ('TEMP',    world.temperature,   METER_COLORS['temp'],   40, 60),
         ]
-        for label, value, color in meters:
-            y = self._draw_meter(x, y, pw, label, value, color)
+        for label, value, color, opt_low, opt_high in meters:
+            y = self._draw_meter(x, y, pw, label, value, color, opt_low, opt_high)
             y += 6
 
         # Divider
@@ -289,22 +289,40 @@ class Renderer:
         self,
         x: int, y: int, width: int,
         label: str, value: float, color: tuple,
+        opt_low: float = None, opt_high: float = None,
     ) -> int:
         """
-        Draw a labeled meter bar.
+        Draw a labeled meter bar with an optional optimal-range overlay.
+        The optimal zone is shown as a dimly highlighted region on the bar
+        with white tick marks at its boundaries.
         Returns the new y position after drawing.
         """
-        # Label + numeric value
+        # Label: left side shows name + value; right side shows optimal range
         bar_label = self.font_sm.render(
             f"{label}  {value:.1f}", True, UI_TEXT_COLOR
         )
         self.screen.blit(bar_label, (x, y))
+
+        if opt_low is not None and opt_high is not None:
+            range_txt = self.font_sm.render(
+                f"opt {opt_low:.0f}-{opt_high:.0f}", True, (90, 110, 90)
+            )
+            rw = range_txt.get_width()
+            self.screen.blit(range_txt, (x + width - rw, y))
+
         y += 16
 
         # Bar background
         bar_h    = 10
         bar_rect = pygame.Rect(x, y, width, bar_h)
         pygame.draw.rect(self.screen, (40, 45, 60), bar_rect, border_radius=4)
+
+        # Optimal zone: faint green highlight behind the fill
+        if opt_low is not None and opt_high is not None:
+            oz_x = x + int(width * opt_low  / 100.0)
+            oz_w = int(width * (opt_high - opt_low) / 100.0)
+            oz_rect = pygame.Rect(oz_x, y, oz_w, bar_h)
+            pygame.draw.rect(self.screen, (25, 65, 30), oz_rect)   # dark green band
 
         # Bar fill (clamped 0-100)
         fill_ratio = max(0.0, min(1.0, value / 100.0))
@@ -315,6 +333,15 @@ class Renderer:
                 pygame.Rect(x, y, fill_w, bar_h),
                 border_radius=4,
             )
+
+        # Tick marks at optimal boundaries (drawn on top of fill)
+        if opt_low is not None and opt_high is not None:
+            for boundary in (opt_low, opt_high):
+                tick_x = x + int(width * boundary / 100.0)
+                pygame.draw.line(
+                    self.screen, (220, 220, 220),
+                    (tick_x, y), (tick_x, y + bar_h - 1), 1,
+                )
 
         return y + bar_h
 
