@@ -2,18 +2,13 @@
 # main.py — Entry point and game loop for World Balance Architects
 # =============================================================================
 #
-# AGENT SELECTION — change these two lines to pick which agents compete:
-#   'minimax'      → MinimaxAgent  (adversarial planning)
-#   'montecarlo'   → MonteCarloAgent (simulation-based)
-#   'qlearning'    → QLearningAgent (experience-based, trains before game)
+# An in-game selection screen lets you pick Agent A and Agent B at startup.
+# Available agents: minimax | montecarlo | qlearning
 #
-AGENT_A_TYPE = 'minimax'
-AGENT_B_TYPE = 'montecarlo'
-#
-# Controls:
+# Controls (in-game):
 #   SPACE      — step one agent turn manually
 #   A          — toggle auto-play (agents play continuously)
-#   R          — reset / start new game
+#   R          — reset / return to agent selection
 #   ESC        — quit
 #   +  /  -    — auto-play speed up / slow down
 # =============================================================================
@@ -37,6 +32,148 @@ AUTO_PLAY_DELAY_MS  = 600     # default: one turn every 600 ms
 AUTO_PLAY_SPEED_STEP = 100    # +/- key changes delay by this amount
 AUTO_PLAY_MIN_MS     = 100
 AUTO_PLAY_MAX_MS     = 2000
+
+
+# =============================================================================
+# Agent-selection screen (shown at startup and after every reset)
+# =============================================================================
+
+_AGENT_OPTIONS = [
+    ('minimax',    'Minimax',     'Adversarial tree search'),
+    ('montecarlo', 'Monte Carlo', 'Simulation-based rollouts'),
+    ('qlearning',  'Q-Learning',  'Experience & learning'),
+]
+
+
+def run_selection_screen(screen, clock):
+    """
+    Display an interactive agent-selection screen.
+    The user clicks one button per column to pick Agent A and Agent B,
+    then clicks Start.  Returns (a_type, b_type) as strings.
+    """
+    # ── Fonts ──────────────────────────────────────────────────────────────────
+    f_title  = pygame.font.SysFont('Segoe UI', 34, bold=True)
+    f_sub    = pygame.font.SysFont('Segoe UI', 17)
+    f_head   = pygame.font.SysFont('Segoe UI', 21, bold=True)
+    f_btn    = pygame.font.SysFont('Segoe UI', 17, bold=True)
+    f_desc   = pygame.font.SysFont('Segoe UI', 13)
+    f_start  = pygame.font.SysFont('Segoe UI', 19, bold=True)
+
+    # ── Layout ─────────────────────────────────────────────────────────────────
+    COL_A_CX  = SCREEN_WIDTH // 4        # 225 — Agent A column centre
+    COL_B_CX  = SCREEN_WIDTH * 3 // 4   # 675 — Agent B column centre
+    BTN_W, BTN_H = 190, 68
+    BTN_GAP      = 14
+    FIRST_BTN_Y  = 230
+
+    # ── Colours ────────────────────────────────────────────────────────────────
+    BG          = (15, 18, 28)
+    C_TEXT      = (220, 220, 220)
+    C_DIM       = (130, 140, 160)
+    C_DIV       = (45, 55, 75)
+    C_BTN       = (35, 44, 60)
+    C_BTN_HOV   = (50, 62, 85)
+    C_SEL_A     = (130, 35, 35)
+    C_SEL_B     = (28, 65, 140)
+    C_BORDER    = (60, 70, 90)
+    C_BORDER_SA = (220, 80, 80)
+    C_BORDER_SB = (80, 130, 220)
+    C_START     = (45, 140, 65)
+    C_START_H   = (60, 170, 85)
+    C_HEAD_A    = (220, 80, 80)
+    C_HEAD_B    = (80, 130, 220)
+
+    selected = {AGENT_A: 'minimax', AGENT_B: 'montecarlo'}
+
+    while True:
+        mx, my = pygame.mouse.get_pos()
+        screen.fill(BG)
+
+        # ── Title ──────────────────────────────────────────────────────────────
+        t1 = f_title.render("World Balance Architects", True, C_TEXT)
+        screen.blit(t1, (SCREEN_WIDTH // 2 - t1.get_width() // 2, 38))
+        t2 = f_sub.render("Choose which agents will compete", True, C_DIM)
+        screen.blit(t2, (SCREEN_WIDTH // 2 - t2.get_width() // 2, 84))
+
+        # ── Divider + column headers ────────────────────────────────────────────
+        pygame.draw.line(screen, C_DIV,
+                         (SCREEN_WIDTH // 2, 115), (SCREEN_WIDTH // 2, 500), 1)
+
+        ha = f_head.render("Agent A", True, C_HEAD_A)
+        screen.blit(ha, (COL_A_CX - ha.get_width() // 2, 120))
+        hb = f_head.render("Agent B", True, C_HEAD_B)
+        screen.blit(hb, (COL_B_CX - hb.get_width() // 2, 120))
+
+        # Thin underline beneath headers
+        for cx, color in ((COL_A_CX, C_HEAD_A), (COL_B_CX, C_HEAD_B)):
+            pygame.draw.line(screen, color,
+                             (cx - 55, 145), (cx + 55, 145), 2)
+
+        # ── Agent buttons (3 per column) ────────────────────────────────────────
+        btn_map = {AGENT_A: [], AGENT_B: []}
+
+        for agent_id, col_cx, c_sel, c_bord_sel in (
+            (AGENT_A, COL_A_CX, C_SEL_A, C_BORDER_SA),
+            (AGENT_B, COL_B_CX, C_SEL_B, C_BORDER_SB),
+        ):
+            for row, (atype, label, desc) in enumerate(_AGENT_OPTIONS):
+                bx = col_cx - BTN_W // 2
+                by = FIRST_BTN_Y + row * (BTN_H + BTN_GAP)
+                rect = pygame.Rect(bx, by, BTN_W, BTN_H)
+                btn_map[agent_id].append((rect, atype))
+
+                is_sel = selected[agent_id] == atype
+                is_hov = rect.collidepoint(mx, my) and not is_sel
+
+                # Background
+                fill   = c_sel if is_sel else (C_BTN_HOV if is_hov else C_BTN)
+                border = c_bord_sel if is_sel else C_BORDER
+                bw     = 2 if is_sel else 1
+                pygame.draw.rect(screen, fill, rect, border_radius=8)
+                pygame.draw.rect(screen, border, rect, bw, border_radius=8)
+
+                # Label + description
+                lt = f_btn.render(label, True, C_TEXT)
+                screen.blit(lt, (rect.centerx - lt.get_width() // 2,
+                                 rect.top + 14))
+                dt = f_desc.render(desc, True,
+                                   C_TEXT if is_sel else C_DIM)
+                screen.blit(dt, (rect.centerx - dt.get_width() // 2,
+                                 rect.top + 38))
+
+        # ── Start button ────────────────────────────────────────────────────────
+        start_rect = pygame.Rect(SCREEN_WIDTH // 2 - 130, 520, 260, 56)
+        s_hov      = start_rect.collidepoint(mx, my)
+        pygame.draw.rect(screen, C_START_H if s_hov else C_START,
+                         start_rect, border_radius=10)
+        pygame.draw.rect(screen, C_BORDER, start_rect, 1, border_radius=10)
+        st = f_start.render("Start Game", True, (255, 255, 255))
+        screen.blit(st, (start_rect.centerx - st.get_width() // 2,
+                         start_rect.centery - st.get_height() // 2))
+
+        # ── Selection summary (below headers, above buttons) ────────────────────
+        # (drawn implicitly via button highlight — no extra text needed)
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
+        # ── Events ─────────────────────────────────────────────────────────────
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                # Check agent buttons
+                for agent_id, buttons in btn_map.items():
+                    for rect, atype in buttons:
+                        if rect.collidepoint(event.pos):
+                            selected[agent_id] = atype
+                # Check start
+                if start_rect.collidepoint(event.pos):
+                    return selected[AGENT_A], selected[AGENT_B]
 
 
 def _q_table_path(agent_id: str) -> str:
@@ -153,98 +290,99 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
 
 
 def main():
-    # ── Build agents ──────────────────────────────────────────────────────────
-    print(f"\nBuilding agents:  A={AGENT_A_TYPE}  B={AGENT_B_TYPE}")
-    agent_a = build_agent(AGENT_A_TYPE, AGENT_A)
-    agent_b = build_agent(AGENT_B_TYPE, AGENT_B)
-    agents  = {AGENT_A: agent_a, AGENT_B: agent_b}
-    print(f"  Agent A → {agent_a.name}")
-    print(f"  Agent B → {agent_b.name}\n")
-
-    # ── Pygame-CE init ────────────────────────────────────────────────────────
+    # ── Pygame-CE init (must come before the selection screen) ────────────────
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption(
-        f"{TITLE}  |  A: {agent_a.name}  vs  B: {agent_b.name}"
-    )
+    pygame.display.set_caption(TITLE)
     clock = pygame.time.Clock()
 
-    # ── Game state ────────────────────────────────────────────────────────────
-    world         = World()
-    renderer      = Renderer(screen)
-    game_over     = False
-    end_reason    = None
-    auto_play     = True          # starts playing immediately on launch
-    auto_delay_ms = AUTO_PLAY_DELAY_MS
-    last_auto_ms  = 0
+    # Outer loop: selection → game → back to selection on R
+    while True:
+        # ── Agent selection screen ─────────────────────────────────────────────
+        a_type, b_type = run_selection_screen(screen, clock)
 
-    world.print_grid()
-    print("Game started — agents are playing automatically.")
-    print("Controls: SPACE=step  A=pause/resume  R=reset  +/-=speed  ESC=quit\n")
+        # ── Build agents ───────────────────────────────────────────────────────
+        print(f"\nBuilding agents:  A={a_type}  B={b_type}")
+        agent_a = build_agent(a_type, AGENT_A)
+        agent_b = build_agent(b_type, AGENT_B)
+        agents  = {AGENT_A: agent_a, AGENT_B: agent_b}
+        print(f"  Agent A → {agent_a.name}")
+        print(f"  Agent B → {agent_b.name}\n")
 
-    # ── Main loop ─────────────────────────────────────────────────────────────
-    running = True
-    while running:
-        now_ms = pygame.time.get_ticks()
+        pygame.display.set_caption(
+            f"{TITLE}  |  A: {agent_a.name}  vs  B: {agent_b.name}"
+        )
 
-        # ── Events ────────────────────────────────────────────────────────────
-        for event in pygame.event.get():
+        # ── Game state ─────────────────────────────────────────────────────────
+        world         = World()
+        renderer      = Renderer(screen)
+        game_over     = False
+        end_reason    = None
+        auto_play     = True
+        auto_delay_ms = AUTO_PLAY_DELAY_MS
+        last_auto_ms  = 0
 
-            if event.type == pygame.QUIT:
-                save_q_agents(agents)
-                running = False
+        world.print_grid()
+        print("Game started — agents are playing automatically.")
+        print("Controls: SPACE=step  A=pause/resume  R=new selection  +/-=speed  ESC=quit\n")
 
-            if event.type == pygame.KEYDOWN:
+        # ── Game loop ──────────────────────────────────────────────────────────
+        running = True
+        while running:
+            now_ms = pygame.time.get_ticks()
 
-                if event.key == pygame.K_ESCAPE:
+            # ── Events ────────────────────────────────────────────────────────
+            for event in pygame.event.get():
+
+                if event.type == pygame.QUIT:
                     save_q_agents(agents)
-                    running = False
+                    pygame.quit()
+                    sys.exit()
 
-                # Toggle auto-play pause/resume
-                elif event.key == pygame.K_a:
-                    auto_play = not auto_play
-                    print(f"Auto-play: {'RESUMED' if auto_play else 'PAUSED'}")
+                if event.type == pygame.KEYDOWN:
 
-                # Manual step
-                elif event.key == pygame.K_SPACE and not game_over:
+                    if event.key == pygame.K_ESCAPE:
+                        save_q_agents(agents)
+                        pygame.quit()
+                        sys.exit()
+
+                    # Toggle auto-play pause/resume
+                    elif event.key == pygame.K_a:
+                        auto_play = not auto_play
+                        print(f"Auto-play: {'RESUMED' if auto_play else 'PAUSED'}")
+
+                    # Manual step
+                    elif event.key == pygame.K_SPACE and not game_over:
+                        game_over, end_reason = run_agent_turn(world, agents)
+
+                    # R — save, then return to agent-selection screen
+                    elif event.key == pygame.K_r:
+                        save_q_agents(agents)
+                        running = False
+
+                    # Speed up / slow down auto-play
+                    elif event.key in (pygame.K_EQUALS, pygame.K_PLUS):
+                        auto_delay_ms = max(AUTO_PLAY_MIN_MS,
+                                            auto_delay_ms - AUTO_PLAY_SPEED_STEP)
+                        print(f"Auto-play delay: {auto_delay_ms} ms")
+
+                    elif event.key == pygame.K_MINUS:
+                        auto_delay_ms = min(AUTO_PLAY_MAX_MS,
+                                            auto_delay_ms + AUTO_PLAY_SPEED_STEP)
+                        print(f"Auto-play delay: {auto_delay_ms} ms")
+
+            # ── Auto-play tick ────────────────────────────────────────────────
+            if auto_play and not game_over:
+                if now_ms - last_auto_ms >= auto_delay_ms:
                     game_over, end_reason = run_agent_turn(world, agents)
+                    last_auto_ms = now_ms
+                    if game_over:
+                        auto_play = False
 
-                # Reset — starts a brand new game, auto-play resumes
-                elif event.key == pygame.K_r:
-                    save_q_agents(agents)
-                    world      = World()
-                    game_over  = False
-                    end_reason = None
-                    auto_play  = True
-                    world.print_grid()
-                    print("Game reset — agents playing again.\n")
-
-                # Speed up / slow down auto-play
-                elif event.key in (pygame.K_EQUALS, pygame.K_PLUS):
-                    auto_delay_ms = max(AUTO_PLAY_MIN_MS,
-                                        auto_delay_ms - AUTO_PLAY_SPEED_STEP)
-                    print(f"Auto-play delay: {auto_delay_ms} ms")
-
-                elif event.key == pygame.K_MINUS:
-                    auto_delay_ms = min(AUTO_PLAY_MAX_MS,
-                                        auto_delay_ms + AUTO_PLAY_SPEED_STEP)
-                    print(f"Auto-play delay: {auto_delay_ms} ms")
-
-        # ── Auto-play tick ────────────────────────────────────────────────────
-        if auto_play and not game_over:
-            if now_ms - last_auto_ms >= auto_delay_ms:
-                game_over, end_reason = run_agent_turn(world, agents)
-                last_auto_ms = now_ms
-                if game_over:
-                    auto_play = False
-
-        # ── Draw ──────────────────────────────────────────────────────────────
-        renderer.draw(world)
-        pygame.display.flip()
-        clock.tick(FPS)
-
-    pygame.quit()
-    sys.exit()
+            # ── Draw ──────────────────────────────────────────────────────────
+            renderer.draw(world)
+            pygame.display.flip()
+            clock.tick(FPS)
 
 
 if __name__ == "__main__":
