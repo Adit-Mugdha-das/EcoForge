@@ -252,6 +252,13 @@ def _update_global_meters(world):
     overload_factor = 1.0 + max(0.0, world.population - 100) / 200.0
 
     food_by_pop   = max(world.population * 0.04, 1.0) * overload_factor
+    # Food abundance intake: when population is large AND food is plentiful,
+    # per-capita consumption rises — richer diets, more food waste, surplus eating.
+    # Multiplier scales with how far food exceeds the optimal floor (50).
+    #   food=60, pop>100 → +4%    food=70, pop>100 → +8%    food=80, pop>100 → +12%
+    if world.population > 100 and world.food > METER_OPTIMAL_LOW:
+        food_by_pop *= 1.0 + (world.food - METER_OPTIMAL_LOW) * 0.004
+
     oxy_ratio     = min(1.0, world.oxygen / 40.0)        # full breathing at oxy≥40, less below
     oxygen_by_pop = max(world.population * 0.04, 1.6) * oxy_ratio * overload_factor
     water_by_pop  = max(world.population * 0.01, 0.25) * overload_factor
@@ -316,11 +323,17 @@ def _update_global_meters(world):
     else:
         forest_cooling = forest_maturity_sum * 0.05   # gentle damping in optimal range
 
+    # Overpopulation heat: above 100 people, dense human activity — body heat, waste
+    # decomposition, energy consumption — adds cumulative warming each step.
+    #   pop=100 → 0.00/step   pop=150 → 0.25/step   pop=200 → 0.50/step
+    pop_heat = max(0.0, world.population - 100) * 0.005
+
     temp_delta = (
         + 0.5                    # passive greenhouse warming
         + farm_count   * 0.1     # agriculture warms planet
         + solar_count  * 0.4     # solar panels generate heat
         + oxygen_heat            # excess oxygen causes oxidative warming
+        + pop_heat               # overpopulation human activity heat (above 100)
         - forest_cooling         # context-sensitive forest cooling
         - water_coverage * 0.01  # wetlands cool slightly
         - heat_radiation         # planetary heat radiation — self-regulation above 80
