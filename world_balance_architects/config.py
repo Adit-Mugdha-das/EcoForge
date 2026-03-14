@@ -36,9 +36,9 @@ AGENT_A = 'A'
 AGENT_B = 'B'
 
 # --- Initial planet meter values (0-100) ---
-INITIAL_WATER       = 20.0   # low — below safe zone (50-80), forces agents to act
-INITIAL_FOOD        = 20.0   # low — 1.0/step drain means food crisis without farms
-INITIAL_OXYGEN      = 20.0   # low — needs forests quickly
+INITIAL_WATER       = 25.0   # slightly low — reservoirs are still needed
+INITIAL_FOOD        = 35.0   # moderate — population survives while agents build farms
+INITIAL_OXYGEN      = 35.0   # moderate — population survives while agents build forests
 INITIAL_TEMPERATURE = 72.0   # slightly high — forces forests to cool planet
 
 # --- Planet meter target ranges ---

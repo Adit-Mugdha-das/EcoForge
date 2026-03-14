@@ -182,7 +182,7 @@ def _update_global_meters(world):
     heat_evap = max(0.0, world.temperature - 70) * 0.06
 
     # Food spoilage: excess food (>80) rots quickly
-    food_spoilage = max(0.0, world.food - 80) * 0.20
+    food_spoilage = max(0.0, world.food - 80) * 0.30
 
     # Oxygen self-regulation: excess oxygen (>80) dissipates fast
     oxygen_bleed = max(0.0, world.oxygen - 80) * 0.25
@@ -209,12 +209,16 @@ def _update_global_meters(world):
         pop_change -= 1.0    # heat stress reduces growth
     if world.water_level < 20:
         pop_change -= 2.0    # drought kills population
+    pop_change = max(-4.0, pop_change)       # cap: can't lose more than 4/step
     world.population = max(5.0, min(200.0, world.population + pop_change))
 
-    # Population consumes food, oxygen, and water proportionally to their size
-    food_by_pop   = world.population * 0.04   # eating   (2.0/step at pop=50)
-    oxygen_by_pop = world.population * 0.02   # breathing (1.0/step at pop=50)
-    water_by_pop  = world.population * 0.01   # drinking  (0.5/step at pop=50)
+    # Population consumes food, oxygen, and water proportionally to their size.
+    # effective_pop floor of 30 = "background biosphere" that always consumes,
+    # preventing meters from filling when a crisis has temporarily crashed population.
+    effective_pop = max(world.population, 30.0)
+    food_by_pop   = effective_pop * 0.04   # eating    (min 1.2/step)
+    oxygen_by_pop = effective_pop * 0.03   # breathing (min 0.9/step — raised from 0.02)
+    water_by_pop  = effective_pop * 0.01   # drinking  (min 0.3/step)
 
     # Crop heat/flood stress
     if world.temperature > 75:
@@ -243,8 +247,8 @@ def _update_global_meters(world):
 
     # ---- Food delta ----
     food_delta = (
-        mature_farm_count * 0.8 * farm_efficiency  # steady farm drip
-        - food_by_pop                               # population eats — scales with population
+        mature_farm_count * 0.5 * farm_efficiency  # was 0.8 — reduced to prevent overproduction
+        - food_by_pop                               # population eats — scales with effective_pop
         - food_spoilage                             # excess food rots (>80)
     )
     world.food = _clamp(world.food + food_delta)
