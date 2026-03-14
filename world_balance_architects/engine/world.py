@@ -218,13 +218,26 @@ class World:
     def _update_stability(self):
         """
         Recompute planet stability as an equal-weighted average of all 4 meter scores.
-        Clamps result to [0.0, 1.0].
+        Hard-caps the result when any critical resource (water/food/oxygen) is near zero —
+        an ecosystem cannot be stable if any essential resource is depleted.
         """
         w = self._score_meter(self.water_level)
         f = self._score_meter(self.food)
         o = self._score_meter(self.oxygen)
         t = self._score_temperature(self.temperature)
-        self.stability = max(0.0, min(1.0, 0.25 * (w + f + o + t)))
+        base = max(0.0, min(1.0, 0.25 * (w + f + o + t)))
+
+        # Hard cap: a planet cannot be stable if a critical resource is nearly gone.
+        # Thresholds mirror collapse_penalty tiers in eval.py.
+        for val in (self.water_level, self.food, self.oxygen):
+            if val < 5:
+                base = min(base, 0.10)   # near-zero → imminent collapse (3 turns)
+            elif val < 15:
+                base = min(base, 0.20)   # critically low → severe instability
+            elif val < 25:
+                base = min(base, 0.35)   # very low → visible stress
+
+        self.stability = base
 
     # -------------------------------------------------------------------------
     # Turn management

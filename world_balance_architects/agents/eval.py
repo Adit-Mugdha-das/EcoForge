@@ -230,7 +230,13 @@ def _asset_value(world, agent: str) -> float:
             value += forest_val
 
         elif cell.terrain == TERRAIN_FARM:
-            value += (3.0 + cell.crop_stage * 0.5) * food_mult
+            farm_val = (3.0 + cell.crop_stage * 0.5) * food_mult
+            # Building more farms when water is already critically low is
+            # counterproductive — each farm drains 0.2 water/step.
+            if world.water_level < 40:
+                water_stress = max(0.2, world.water_level / 40.0)
+                farm_val *= water_stress
+            value += farm_val
 
         elif cell.terrain == TERRAIN_RESERVOIR:
             value += 4.0 * water_mult
