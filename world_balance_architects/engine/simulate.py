@@ -184,8 +184,9 @@ def _update_global_meters(world):
     # Food spoilage: excess food (>80) rots quickly
     food_spoilage = max(0.0, world.food - 80) * 0.30
 
-    # Oxygen self-regulation: excess oxygen (>80) dissipates fast
-    oxygen_bleed = max(0.0, world.oxygen - 80) * 0.25
+    # Oxygen self-regulation: excess oxygen (>80) dissipates faster
+    # Rate raised 0.25→0.40 so equilibrium with typical forests stays inside optimal range
+    oxygen_bleed = max(0.0, world.oxygen - 80) * 0.40
 
     # Excess oxygen causes atmospheric oxidation → slight warming
     oxygen_heat = max(0.0, world.oxygen - 80) * 0.04
@@ -194,31 +195,32 @@ def _update_global_meters(world):
     heat_decomp = max(0.0, world.temperature - 65) * 0.06
 
     # ---- Population dynamics ----
-    # Population grows when food and oxygen are good, shrinks under stress.
-    # This is the main ecosystem self-regulator:
-    #   high food → population grows → they eat more → food comes down
-    #   low food  → population shrinks → less eating → food recovers
-    pop_change = (world.food - 50) * 0.12   # grows fast with food abundance
+    # Logistic-style growth: food drives it, stress factors drag it down.
+    # Growth coefficient lowered 0.12→0.08 so population changes more gradually.
+    # Change is capped at ±2.5/step (was only -4 floor) to prevent wild swings.
+    pop_change = (world.food - 50) * 0.08   # gentler slope — was 0.12
     if world.oxygen < 25:
-        pop_change -= 4.0    # suffocation — oxygen too low to breathe
-    if world.oxygen < 40:
-        pop_change -= 1.5    # low oxygen stress
+        pop_change -= 2.5    # suffocation (softened from -4.0 — early game is harsh enough)
+    elif world.oxygen < 40:
+        pop_change -= 0.8    # low oxygen stress (softened from -1.5)
     if world.temperature > 75:
-        pop_change -= 3.0    # extreme heat kills off population
-    if world.temperature > 65:
-        pop_change -= 1.0    # heat stress reduces growth
-    if world.water_level < 20:
-        pop_change -= 2.0    # drought kills population
-    pop_change = max(-4.0, pop_change)       # cap: can't lose more than 4/step
+        pop_change -= 2.0    # extreme heat
+    elif world.temperature > 65:
+        pop_change -= 0.8    # heat stress
+    if world.water_level < 15:
+        pop_change -= 1.5    # severe drought
+    elif world.water_level < 30:
+        pop_change -= 0.6    # mild water stress (new tier)
+    pop_change = max(-2.5, min(2.5, pop_change))   # symmetric cap — no more instant crashes
     world.population = max(5.0, min(200.0, world.population + pop_change))
 
     # Population consumes food, oxygen, and water proportionally to their size.
-    # effective_pop floor of 30 = "background biosphere" that always consumes,
-    # preventing meters from filling when a crisis has temporarily crashed population.
-    effective_pop = max(world.population, 30.0)
-    food_by_pop   = effective_pop * 0.04   # eating    (min 1.2/step)
-    oxygen_by_pop = effective_pop * 0.03   # breathing (min 0.9/step — raised from 0.02)
-    water_by_pop  = effective_pop * 0.01   # drinking  (min 0.3/step)
+    # Oxygen breathing is also proportional to available oxygen — when oxygen is
+    # scarce, organisms conserve it (less breathing in thin air = realistic).
+    food_by_pop  = max(world.population * 0.04, 1.0)    # min 1.0/step
+    oxy_ratio    = min(1.0, world.oxygen / 40.0)         # full breathing at oxy≥40, less below
+    oxygen_by_pop = max(world.population * 0.04, 1.6) * oxy_ratio   # breathing floor scales with oxygen
+    water_by_pop = max(world.population * 0.01, 0.25)   # min 0.25/step
 
     # Crop heat/flood stress
     if world.temperature > 75:
