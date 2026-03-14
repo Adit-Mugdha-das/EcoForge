@@ -243,10 +243,18 @@ def _update_global_meters(world):
     # Population consumes food, oxygen, and water proportionally to their size.
     # Oxygen breathing is also proportional to available oxygen — when oxygen is
     # scarce, organisms conserve it (less breathing in thin air = realistic).
-    food_by_pop  = max(world.population * 0.04, 1.0)    # min 1.0/step
-    oxy_ratio    = min(1.0, world.oxygen / 40.0)         # full breathing at oxy≥40, less below
-    oxygen_by_pop = max(world.population * 0.04, 1.6) * oxy_ratio   # breathing floor scales with oxygen
-    water_by_pop = max(world.population * 0.01, 0.25)   # min 0.25/step
+    #
+    # Overpopulation strain: above 100, per-capita consumption rises due to resource
+    # competition, waste buildup, and sanitation pressure in dense populations.
+    #   pop=100 → factor 1.00 (baseline)
+    #   pop=150 → factor 1.25 (25% more per capita)
+    #   pop=200 → factor 1.50 (50% more per capita)
+    overload_factor = 1.0 + max(0.0, world.population - 100) / 200.0
+
+    food_by_pop   = max(world.population * 0.04, 1.0) * overload_factor
+    oxy_ratio     = min(1.0, world.oxygen / 40.0)        # full breathing at oxy≥40, less below
+    oxygen_by_pop = max(world.population * 0.04, 1.6) * oxy_ratio * overload_factor
+    water_by_pop  = max(world.population * 0.01, 0.25) * overload_factor
 
     # Crop heat/flood stress
     if world.temperature > 75:

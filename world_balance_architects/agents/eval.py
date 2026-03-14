@@ -158,14 +158,16 @@ def _score_meter(val: float, low: float = METER_OPTIMAL_LOW,
 
 def _score_temperature(val: float) -> float:
     """
-    Temperature score -0.5–1.0.
-    Optimal range: 40–60. Falls to 0 at temp=85, -0.5 at temp≥97.5.
-    Matches _score_meter behaviour: extreme values are negative, not just zero.
+    Temperature score -0.5–1.0, symmetric on both sides.
+    Optimal range: 40–60.
+      Hot side: hits 0 at temp=85, -0.5 at temp≥97.5
+      Cold side: hits 0 at temp=15, -0.5 at temp≤2.5
     """
     if TEMP_OPTIMAL_MIN <= val <= TEMP_OPTIMAL_MAX:
         return 1.0
     elif val < TEMP_OPTIMAL_MIN:
-        return max(0.0, val / TEMP_OPTIMAL_MIN)
+        # Symmetric with hot side — cold extremes are equally penalised
+        return max(-0.5, 1.0 - (TEMP_OPTIMAL_MIN - val) / 25.0)
     else:
         return max(-0.5, 1.0 - (val - TEMP_OPTIMAL_MAX) / 25.0)
 
