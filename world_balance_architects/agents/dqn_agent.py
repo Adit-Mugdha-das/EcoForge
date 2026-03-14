@@ -215,6 +215,24 @@ class DQNAgent(BaseAgent):
                 best_val  = q_vals[idx]
                 best_move = (action, r, c)
 
+        # Eco-hoarding override: if eco is high and the network chose the free
+        # "Adjust Resource Allocation" action, force it to pick the best
+        # building action instead so eco gets spent on actual structures.
+        eco = world.eco_points[self.agent_id]
+        if eco > 60 and best_move[0].name == 'Adjust Resource Allocation':
+            building_moves = [
+                (a, r, c) for a, r, c in moves
+                if a.name != 'Adjust Resource Allocation'
+            ]
+            if building_moves:
+                best_val  = float('-inf')
+                best_move = building_moves[0]
+                for action, r, c in building_moves:
+                    idx = DQN_ACTION_INDEX.get(action.name, 0)
+                    if q_vals[idx] > best_val:
+                        best_val  = q_vals[idx]
+                        best_move = (action, r, c)
+
         return best_move
 
     # ── Learning update ───────────────────────────────────────────────────────

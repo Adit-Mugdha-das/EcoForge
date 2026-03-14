@@ -135,6 +135,14 @@ def compute_reward(old_stability: float, world, agent: str) -> float:
     # Small positive for owning assets (encourages building)
     reward += _asset_value(world, agent) * 0.1
 
+    # Eco hoarding penalty — high unspent eco means the agent is not building.
+    # Without this, DQN learns to spam free actions (Adjust Resource Allocation)
+    # and let the world evolve on its own instead of actively constructing.
+    #   eco=60 → no penalty   eco=80 → -1.0   eco=99 → -1.95
+    eco = world.eco_points[agent]
+    if eco > 60:
+        reward -= (eco - 60) * 0.05
+
     return reward
 
 
