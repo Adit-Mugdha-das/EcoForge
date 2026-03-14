@@ -213,6 +213,11 @@ def _update_global_meters(world):
     # carrying capacity (200). Crashes are left unscaled — high population with
     # scarce resources should crash just as fast regardless of density.
     base_growth = (world.food - 50) * 0.08
+    # Very high food (>90) triggers an extra reproduction push — abundant nutrition
+    # accelerates breeding cycles. This creates a pull-down feedback: food spikes →
+    # population surges → more food consumed → food returns to normal range.
+    if world.food > 90:
+        base_growth += (world.food - 90) * 0.07  # food=95: +0.35  food=100: +0.70
     # Ecosystem thriving bonus: when all four meters are simultaneously in optimal range,
     # the planet is healthy enough to support faster reproduction — realistic overpopulation
     # scenario when food, water, oxygen, and temperature are all ideal.
@@ -257,11 +262,11 @@ def _update_global_meters(world):
     overload_factor = 1.0 + max(0.0, world.population - 100) / 200.0
 
     food_by_pop   = max(world.population * 0.04, 1.0) * overload_factor
-    # Food abundance intake: when population is large AND food is plentiful,
-    # per-capita consumption rises — richer diets, more food waste, surplus eating.
-    # Multiplier scales with how far food exceeds the optimal floor (50).
-    #   food=60, pop>100 → +4%    food=70, pop>100 → +8%    food=80, pop>100 → +12%
-    if world.population > 100 and world.food > METER_OPTIMAL_LOW:
+    # Food abundance intake: when food is plentiful, everyone eats more —
+    # richer diets, food waste, surplus consumption. Applies at all population
+    # sizes (not just >100) so high food always accelerates its own drawdown.
+    #   food=60 → +4%   food=70 → +8%   food=80 → +12%   food=95 → +18%
+    if world.food > METER_OPTIMAL_LOW:
         food_by_pop *= 1.0 + (world.food - METER_OPTIMAL_LOW) * 0.004
 
     oxy_ratio     = min(1.0, world.oxygen / 40.0)        # full breathing at oxy≥40, less below
