@@ -192,20 +192,32 @@ _PARAMS_CONFIG = [
     ('eco_points',  'Starting Eco (each)',  25.0,  5.0,  99.0,  5.0, 'Per agent'),
 ]
 
+_MINIMAX_PARAMS = [
+    ('mm_depth',    'Minimax Depth',         2.0,  1.0,   6.0,  1.0, 'Higher = stronger (slower)'),
+    ('mm_branches', 'Max Branches',         12.0,  4.0,  28.0,  2.0, 'Moves sampled per node'),
+]
 
-def run_params_screen(screen, clock):
+_MC_PARAMS = [
+    ('mc_rollouts', 'MC Rollouts',          15.0,  5.0,  60.0,  5.0, 'More = stronger (slower)'),
+    ('mc_depth',    'MC Rollout Depth',      8.0,  4.0,  24.0,  2.0, 'Steps per rollout'),
+]
+
+
+def run_params_screen(screen, clock, a_type: str = '', b_type: str = ''):
     """
-    Let the user tweak starting planet parameters with +/- buttons.
+    Let the user tweak starting planet parameters and (if relevant)
+    algorithm hyperparameters with +/- buttons.
     'Use Defaults' resets everything; 'Start Game' confirms.
-    Returns a dict {key: value} to pass to World(custom_params=...).
+    Returns a dict {key: value} used by World() and build_agent().
     """
-    f_title = pygame.font.SysFont('Segoe UI', 34, bold=True)
-    f_sub   = pygame.font.SysFont('Segoe UI', 17)
-    f_label = pygame.font.SysFont('Segoe UI', 17, bold=True)
-    f_val   = pygame.font.SysFont('Segoe UI', 17, bold=True)
-    f_hint  = pygame.font.SysFont('Segoe UI', 13)
-    f_btn   = pygame.font.SysFont('Segoe UI', 17, bold=True)
-    f_start = pygame.font.SysFont('Segoe UI', 19, bold=True)
+    f_title  = pygame.font.SysFont('Segoe UI', 34, bold=True)
+    f_sub    = pygame.font.SysFont('Segoe UI', 17)
+    f_label  = pygame.font.SysFont('Segoe UI', 15, bold=True)
+    f_sec    = pygame.font.SysFont('Segoe UI', 13, bold=True)
+    f_val    = pygame.font.SysFont('Segoe UI', 15, bold=True)
+    f_hint   = pygame.font.SysFont('Segoe UI', 12)
+    f_btn    = pygame.font.SysFont('Segoe UI', 17, bold=True)
+    f_start  = pygame.font.SysFont('Segoe UI', 19, bold=True)
 
     BG        = (15,  18,  28)
     C_TEXT    = (220, 220, 220)
@@ -213,6 +225,8 @@ def run_params_screen(screen, clock):
     C_DIV     = (45,  55,  75)
     C_ROW     = (28,  35,  50)
     C_ROW_ALT = (22,  28,  42)
+    C_ROW_ALG = (25,  40,  35)    # tinted green for algo rows
+    C_ROW_ALG2= (20,  33,  28)
     C_BORDER  = (60,  70,  90)
     C_VAL     = (40,  50,  70)
     C_MINUS   = (110, 45,  45)
@@ -223,20 +237,51 @@ def run_params_screen(screen, clock):
     C_DEF_H   = (80,  80,  120)
     C_START   = (45,  140, 65)
     C_START_H = (60,  170, 85)
+    C_SEC     = (100, 160, 120)   # section separator label colour
 
-    # Working copy of values (float)
-    values = {key: default for key, _l, default, _mn, _mx, _s, _h in _PARAMS_CONFIG}
+    # Build combined list: planet rows always; algo rows if type selected
+    algo_configs = []
+    if 'minimax' in (a_type, b_type):
+        algo_configs.extend(_MINIMAX_PARAMS)
+    if 'montecarlo' in (a_type, b_type):
+        algo_configs.extend(_MC_PARAMS)
 
-    ROW_H   = 62
-    ROW_Y0  = 135
-    BTN_SZ  = 32
+    all_configs = list(_PARAMS_CONFIG) + algo_configs
+    n_planet    = len(_PARAMS_CONFIG)
+    has_algo    = len(algo_configs) > 0
+    n_total     = len(all_configs)
 
-    # Horizontal positions
-    LABEL_X = 75
+    # Working values initialised to defaults
+    values = {key: default for key, _l, default, _mn, _mx, _s, _h in all_configs}
+
+    # ── Dynamic layout ─────────────────────────────────────────────────────────
+    ROW_Y0  = 118
+    SEP_H   = 26 if has_algo else 0     # section-separator height
+    BTN_H   = 48
+    BTN_GAP = 14                        # gap between last row and buttons
+    # Available vertical space for rows
+    _avail  = SCREEN_HEIGHT - ROW_Y0 - SEP_H - BTN_H - BTN_GAP - 10
+    ROW_H   = max(40, min(62, _avail // n_total))
+    BTN_SZ  = min(30, ROW_H - 10)
+
+    # Horizontal positions (fixed regardless of row count)
+    LABEL_X = 72
     MINUS_X = 490
     GAP     = 5
-    VAL_W   = 75
-    HINT_X  = 655
+    VAL_W   = 72
+    HINT_X  = 652
+
+    def _row_y(i: int) -> int:
+        """Top-left y of row i, accounting for the section separator."""
+        if i < n_planet:
+            return ROW_Y0 + i * ROW_H
+        return ROW_Y0 + n_planet * ROW_H + SEP_H + (i - n_planet) * ROW_H
+
+    def _algo_row_color(i: int):
+        return C_ROW_ALG if (i - n_planet) % 2 == 0 else C_ROW_ALG2
+
+    def _btn_area_top() -> int:
+        return _row_y(n_total - 1) + ROW_H + BTN_GAP
 
     while True:
         mx, my = pygame.mouse.get_pos()
@@ -244,52 +289,66 @@ def run_params_screen(screen, clock):
 
         # Title
         t1 = f_title.render("Configure Starting Parameters", True, C_TEXT)
-        screen.blit(t1, (SCREEN_WIDTH // 2 - t1.get_width() // 2, 32))
+        screen.blit(t1, (SCREEN_WIDTH // 2 - t1.get_width() // 2, 30))
         t2 = f_sub.render(
             "Adjust the planet's initial state — or keep the defaults", True, C_DIM)
-        screen.blit(t2, (SCREEN_WIDTH // 2 - t2.get_width() // 2, 80))
-        pygame.draw.line(screen, C_DIV, (50, 112), (850, 112), 1)
+        screen.blit(t2, (SCREEN_WIDTH // 2 - t2.get_width() // 2, 75))
+        pygame.draw.line(screen, C_DIV, (50, 108), (850, 108), 1)
 
-        # Bottom divider + buttons
-        pygame.draw.line(screen, C_DIV, (50, 548), (850, 548), 1)
-        def_rect   = pygame.Rect(SCREEN_WIDTH // 2 - 250, 562, 190, 48)
-        start_rect = pygame.Rect(SCREEN_WIDTH // 2 + 60,  562, 190, 48)
+        # Buttons (anchored below the last row)
+        btn_y      = _btn_area_top()
+        def_rect   = pygame.Rect(SCREEN_WIDTH // 2 - 250, btn_y, 190, BTN_H)
+        start_rect = pygame.Rect(SCREEN_WIDTH // 2 +  60, btn_y, 190, BTN_H)
+
+        pygame.draw.line(screen, C_DIV, (50, btn_y - 8), (850, btn_y - 8), 1)
 
         d_hov = def_rect.collidepoint(mx, my)
         pygame.draw.rect(screen, C_DEF_H if d_hov else C_DEF, def_rect, border_radius=10)
         pygame.draw.rect(screen, C_BORDER, def_rect, 1, border_radius=10)
         dt = f_btn.render("Use Defaults", True, C_TEXT)
-        screen.blit(dt, (def_rect.centerx - dt.get_width() // 2,
-                         def_rect.centery - dt.get_height() // 2))
+        screen.blit(dt, (def_rect.centerx  - dt.get_width()  // 2,
+                         def_rect.centery  - dt.get_height() // 2))
 
         s_hov = start_rect.collidepoint(mx, my)
         pygame.draw.rect(screen, C_START_H if s_hov else C_START, start_rect, border_radius=10)
         pygame.draw.rect(screen, C_BORDER, start_rect, 1, border_radius=10)
         st = f_start.render("Start Game", True, (255, 255, 255))
-        screen.blit(st, (start_rect.centerx - st.get_width() // 2,
+        screen.blit(st, (start_rect.centerx - st.get_width()  // 2,
                          start_rect.centery - st.get_height() // 2))
+
+        # Section separator between planet and algo rows
+        if has_algo:
+            sep_y  = _row_y(n_planet)
+            pygame.draw.line(screen, C_DIV, (50, sep_y - 4), (850, sep_y - 4), 1)
+            sec_lbl = f_sec.render("Algorithm Settings", True, C_SEC)
+            screen.blit(sec_lbl, (SCREEN_WIDTH // 2 - sec_lbl.get_width() // 2,
+                                  sep_y - SEP_H + 4))
 
         # Parameter rows
         minus_btns = []
         plus_btns  = []
 
-        for i, (key, label, default, vmin, vmax, step, hint) in enumerate(_PARAMS_CONFIG):
-            row_y    = ROW_Y0 + i * ROW_H
-            row_rect = pygame.Rect(50, row_y, 800, ROW_H - 6)
-            pygame.draw.rect(screen,
-                             C_ROW if i % 2 == 0 else C_ROW_ALT,
-                             row_rect, border_radius=6)
+        for i, (key, label, default, vmin, vmax, step, hint) in enumerate(all_configs):
+            row_y = _row_y(i)
+            is_algo = i >= n_planet
+
+            # Row background
+            if is_algo:
+                bg_color = _algo_row_color(i)
+            else:
+                bg_color = C_ROW if i % 2 == 0 else C_ROW_ALT
+            pygame.draw.rect(screen, bg_color,
+                             pygame.Rect(50, row_y, 800, ROW_H - 4), border_radius=6)
 
             # Label
             lt = f_label.render(label, True, C_TEXT)
             screen.blit(lt, (LABEL_X,
-                             row_y + (ROW_H - 6) // 2 - lt.get_height() // 2))
+                             row_y + (ROW_H - 4) // 2 - lt.get_height() // 2))
 
-            # Vertical centre of buttons inside the row
-            btn_y = row_y + ((ROW_H - 6) - BTN_SZ) // 2
+            btn_y_row = row_y + ((ROW_H - 4) - BTN_SZ) // 2
 
-            # [-] button
-            m_rect = pygame.Rect(MINUS_X, btn_y, BTN_SZ, BTN_SZ)
+            # [-]
+            m_rect = pygame.Rect(MINUS_X, btn_y_row, BTN_SZ, BTN_SZ)
             m_hov  = m_rect.collidepoint(mx, my)
             pygame.draw.rect(screen, C_MINUS_H if m_hov else C_MINUS, m_rect, border_radius=5)
             pygame.draw.rect(screen, C_BORDER, m_rect, 1, border_radius=5)
@@ -298,8 +357,8 @@ def run_params_screen(screen, clock):
                              m_rect.centery - mt.get_height() // 2))
             minus_btns.append((m_rect, key, vmin, step))
 
-            # Value display
-            v_rect = pygame.Rect(MINUS_X + BTN_SZ + GAP, btn_y, VAL_W, BTN_SZ)
+            # Value box
+            v_rect = pygame.Rect(MINUS_X + BTN_SZ + GAP, btn_y_row, VAL_W, BTN_SZ)
             pygame.draw.rect(screen, C_VAL,    v_rect, border_radius=4)
             pygame.draw.rect(screen, C_BORDER, v_rect, 1, border_radius=4)
             v   = values[key]
@@ -308,8 +367,8 @@ def run_params_screen(screen, clock):
             screen.blit(vt, (v_rect.centerx - vt.get_width() // 2,
                              v_rect.centery - vt.get_height() // 2))
 
-            # [+] button
-            p_rect = pygame.Rect(v_rect.right + GAP, btn_y, BTN_SZ, BTN_SZ)
+            # [+]
+            p_rect = pygame.Rect(v_rect.right + GAP, btn_y_row, BTN_SZ, BTN_SZ)
             p_hov  = p_rect.collidepoint(mx, my)
             pygame.draw.rect(screen, C_PLUS_H if p_hov else C_PLUS, p_rect, border_radius=5)
             pygame.draw.rect(screen, C_BORDER, p_rect, 1, border_radius=5)
@@ -321,7 +380,7 @@ def run_params_screen(screen, clock):
             # Hint
             ht = f_hint.render(hint, True, C_DIM)
             screen.blit(ht, (HINT_X,
-                             row_y + (ROW_H - 6) // 2 - ht.get_height() // 2))
+                             row_y + (ROW_H - 4) // 2 - ht.get_height() // 2))
 
         pygame.display.flip()
         clock.tick(FPS)
@@ -337,15 +396,15 @@ def run_params_screen(screen, clock):
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for m_rect, key, vmin, step in minus_btns:
                     if m_rect.collidepoint(event.pos):
-                        cfg = next(c for c in _PARAMS_CONFIG if c[0] == key)
+                        cfg = next(c for c in all_configs if c[0] == key)
                         values[key] = max(cfg[3], round(values[key] - step, 1))
                 for p_rect, key, vmax, step in plus_btns:
                     if p_rect.collidepoint(event.pos):
-                        cfg = next(c for c in _PARAMS_CONFIG if c[0] == key)
+                        cfg = next(c for c in all_configs if c[0] == key)
                         values[key] = min(cfg[4], round(values[key] + step, 1))
                 if def_rect.collidepoint(event.pos):
                     values = {key: default
-                              for key, _l, default, _mn, _mx, _s, _h in _PARAMS_CONFIG}
+                              for key, _l, default, _mn, _mx, _s, _h in all_configs}
                 if start_rect.collidepoint(event.pos):
                     return dict(values)
 
@@ -377,15 +436,20 @@ def save_learners(agents: dict):
             agent.save(_dqn_model_path(AGENT_A))  # always write to A's file
 
 
-def build_agent(agent_type: str, agent_id: str):
+def build_agent(agent_type: str, agent_id: str, agent_params: dict = None):
     """Instantiate and (if needed) train an agent of the given type."""
     agent_type = agent_type.lower().strip()
+    p = agent_params or {}
 
     if agent_type == 'minimax':
-        return MinimaxAgent(agent_id, depth=2, max_branches=12)
+        return MinimaxAgent(agent_id,
+                            depth=int(p.get('mm_depth', 2)),
+                            max_branches=int(p.get('mm_branches', 12)))
 
     elif agent_type == 'montecarlo':
-        return MonteCarloAgent(agent_id, num_rollouts=15, rollout_depth=8)
+        return MonteCarloAgent(agent_id,
+                               num_rollouts=int(p.get('mc_rollouts', 15)),
+                               rollout_depth=int(p.get('mc_depth', 8)))
 
     elif agent_type == 'qlearning':
         agent = QLearningAgent(agent_id)
@@ -531,12 +595,12 @@ def main():
         a_type, b_type = run_selection_screen(screen, clock)
 
         # ── Parameter customisation screen ─────────────────────────────────────
-        custom_params = run_params_screen(screen, clock)
+        custom_params = run_params_screen(screen, clock, a_type, b_type)
 
         # ── Build agents ───────────────────────────────────────────────────────
         print(f"\nBuilding agents:  A={a_type}  B={b_type}")
-        agent_a = build_agent(a_type, AGENT_A)
-        agent_b = build_agent(b_type, AGENT_B)
+        agent_a = build_agent(a_type, AGENT_A, custom_params)
+        agent_b = build_agent(b_type, AGENT_B, custom_params)
         agents  = {AGENT_A: agent_a, AGENT_B: agent_b}
         print(f"  Agent A → {agent_a.name}")
         print(f"  Agent B → {agent_b.name}\n")
