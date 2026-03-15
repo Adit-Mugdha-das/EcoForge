@@ -202,7 +202,7 @@ def save_learners(agents: dict):
         if isinstance(agent, QLearningAgent):
             agent.save(_q_table_path(agent_id))
         elif isinstance(agent, DQNAgent) and agent.trained:
-            agent.save(_dqn_model_path(agent_id))
+            agent.save(_dqn_model_path(AGENT_A))  # always write to A's file
 
 
 def build_agent(agent_type: str, agent_id: str):
