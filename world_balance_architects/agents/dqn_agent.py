@@ -199,12 +199,28 @@ class DQNAgent(BaseAgent):
     def choose_action(self, world) -> tuple:
         """
         Epsilon-greedy selection over valid moves only.
-        Explore: random valid move.
+        The eco-hoarding filter is applied FIRST (before the explore/exploit
+        split) so eco never piles up even during random exploration.
+
+        Explore: random valid move from the filtered pool.
         Exploit: valid move whose action type has highest Q-value.
         """
         moves = get_all_valid_moves(world, self.agent_id)
         if not moves:
             return None, -1, -1
+
+        # Eco-hoarding filter — runs before epsilon check so it applies to
+        # BOTH random exploration and exploitation.
+        # When eco > 40, restrict the move pool to actions costing >= 4.
+        # Actions that cost < 4 (Adjust=0, Harvest=1, ClearForest=2,
+        # Canal/Forest=3) earn less eco than the +2/turn passive income,
+        # so eco grows whenever they are chosen. Forcing a >= 4 cost action
+        # drains eco back down.
+        eco = world.eco_points[self.agent_id]
+        if eco > 40:
+            expensive_moves = [(a, r, c) for a, r, c in moves if a.cost >= 4]
+            if expensive_moves:
+                moves = expensive_moves   # restrict pool — cheap actions excluded
 
         # Exploration
         if random.random() < self.epsilon:
@@ -224,29 +240,6 @@ class DQNAgent(BaseAgent):
             if q_vals[idx] > best_val:
                 best_val  = q_vals[idx]
                 best_move = (action, r, c)
-
-        # Eco-hoarding override: when eco is high and the model picks a cheap
-        # action (cost < 4), force it to pick the best expensive action instead.
-        #
-        # Why cost < 4?
-        #   Adjust (0), Harvest Crop (1), Clear Forest (2), Canal/Forest (3)
-        #   all cost <= eco income (+2/turn), so eco never drains — it grows.
-        #   Forest/Farm (4) and Solar (8) / Reservoir (10) actually drain eco.
-        #
-        # Threshold lowered from 60 → 40 so eco never has a chance to pile up.
-        eco = world.eco_points[self.agent_id]
-        if eco > 40 and best_move[0].cost < 4:
-            expensive_moves = [
-                (a, r, c) for a, r, c in moves if a.cost >= 4
-            ]
-            if expensive_moves:
-                best_val  = float('-inf')
-                best_move = expensive_moves[0]
-                for action, r, c in expensive_moves:
-                    idx = DQN_ACTION_INDEX.get(action.name, 0)
-                    if q_vals[idx] > best_val:
-                        best_val  = q_vals[idx]
-                        best_move = (action, r, c)
 
         return best_move
 

@@ -226,24 +226,28 @@ def build_agent(agent_type: str, agent_id: str):
         return agent
 
     elif agent_type == 'dqn':
-        agent     = DQNAgent(agent_id)
-        best_path = _dqn_best_model_path(agent_id)
-        path      = _dqn_model_path(agent_id)
+        agent = DQNAgent(agent_id)
 
-        # Prefer _best.pt (highest win-rate checkpoint) over latest checkpoint
+        # Always load from Agent A's model — it is the only trained model.
+        # Both Agent A and Agent B slots share the same weights.
+        # The state vector is fully relative (own_eco, opp_eco, own_cells,
+        # opp_cells, score_diff) so the same weights work correctly from
+        # either agent's perspective.
+        best_path = _dqn_best_model_path(AGENT_A)   # dqn_model_A_best.pt
+        path      = _dqn_model_path(AGENT_A)         # dqn_model_A.pt
         load_path = best_path if os.path.exists(best_path) else path
 
         if os.path.exists(load_path):
-            which = "best" if load_path == best_path else "latest"
-            print(f"[DQN] Loading {which} model: {load_path}")
+            which = "best" if "_best" in load_path else "latest"
+            print(f"[DQN] Agent {agent_id} loading {which} model: {load_path}")
             try:
                 agent.load(load_path)
             except RuntimeError as exc:
                 print(f"[DQN] WARNING: {exc}")
-                print(f"[DQN] Starting untrained — run: python train_dqn.py --agent {agent_id}")
+                print(f"[DQN] Starting untrained — run: python train_dqn.py")
         else:
-            print(f"[DQN] No saved model found for Agent {agent_id}.")
-            print(f"[DQN] Run:  python train_dqn.py --agent {agent_id}")
+            print(f"[DQN] No trained model found (expected {path}).")
+            print(f"[DQN] Run:  python train_dqn.py")
             print(f"[DQN] Starting untrained — agent will explore randomly.")
         return agent
 
