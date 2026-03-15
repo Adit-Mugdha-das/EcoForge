@@ -294,7 +294,7 @@ def _update_global_meters(world):
         + forest_transpiration         # forests release moisture (water cycle)
         - farm_count         * 0.2    # farms need irrigation (lowered 0.4→0.2 — 0.4 was too draining)
         - water_by_pop                 # population drinks/uses water
-        - 0.8                          # passive evaporation
+        - 0.6                          # passive evaporation (lowered 0.8→0.6)
         - flood_drain                  # strong drain when flooded (>80)
         - heat_evap                    # extra drain in extreme heat
     )

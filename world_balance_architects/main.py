@@ -201,7 +201,7 @@ def save_learners(agents: dict):
     for agent_id, agent in agents.items():
         if isinstance(agent, QLearningAgent):
             agent.save(_q_table_path(agent_id))
-        elif isinstance(agent, DQNAgent):
+        elif isinstance(agent, DQNAgent) and agent.trained:
             agent.save(_dqn_model_path(agent_id))
 
 
