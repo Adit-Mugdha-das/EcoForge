@@ -53,16 +53,18 @@ class World:
     All simulation and action results flow through this object.
     """
 
-    def __init__(self):
+    def __init__(self, custom_params=None):
+        p = custom_params or {}
+
         # Build the grid
         self.grid = [[Cell() for _ in range(GRID_WIDTH)]
                      for _ in range(GRID_HEIGHT)]
 
         # Global planet meters (each 0-100)
-        self.water_level  = INITIAL_WATER
-        self.food         = INITIAL_FOOD
-        self.oxygen       = INITIAL_OXYGEN
-        self.temperature  = INITIAL_TEMPERATURE
+        self.water_level  = float(p.get('water_level',  INITIAL_WATER))
+        self.food         = float(p.get('food',         INITIAL_FOOD))
+        self.oxygen       = float(p.get('oxygen',       INITIAL_OXYGEN))
+        self.temperature  = float(p.get('temperature',  INITIAL_TEMPERATURE))
 
         # Planet stability index (0.0-1.0), recomputed each simulation step
         self.stability    = 0.0
@@ -73,13 +75,14 @@ class World:
         self.current_agent = AGENT_A         # whose turn it is
 
         # Per-agent eco points (action currency)
+        eco = int(p.get('eco_points', STARTING_ECO_POINTS))
         self.eco_points = {
-            AGENT_A: STARTING_ECO_POINTS,
-            AGENT_B: STARTING_ECO_POINTS,
+            AGENT_A: eco,
+            AGENT_B: eco,
         }
 
         # Planet population (0–200) — grows with food/oxygen, consumes all resources
-        self.population = 50.0
+        self.population = float(p.get('population', 50.0))
 
         # Per-agent scores (accumulated over the game)
         self.scores = {
