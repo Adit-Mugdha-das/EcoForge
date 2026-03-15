@@ -7,7 +7,7 @@
 #   DQN:         neural network takes 9 continuous features → 8 action values
 #
 # Network architecture:
-#   Input  (11)  → Hidden (128) → Hidden (128) → Output (8 Q-values)
+#   Input  (11)  → Hidden (256) → Hidden (256) → Output (8 Q-values)
 #
 # Key DQN techniques used:
 #   1. Experience Replay   — store past transitions, sample random batches
@@ -61,12 +61,12 @@ DQN_STATE_SIZE = 11   # was 9 — added opp_eco and score_diff features
 
 class QNetwork(nn.Module):
     """
-    Fully-connected network: 11 inputs → 128 → 128 → 8 Q-values.
+    Fully-connected network: 11 inputs → 256 → 256 → 8 Q-values.
     Takes a normalized state vector; outputs one Q-value per action type.
     """
     def __init__(self, state_size: int = DQN_STATE_SIZE,
                  n_actions: int = DQN_N_ACTIONS,
-                 hidden: int = 128):
+                 hidden: int = 256):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(state_size, hidden),
@@ -130,10 +130,10 @@ class DQNAgent(BaseAgent):
 
     def __init__(self, agent_id: str,
                  lr: float            = 0.001,
-                 gamma: float         = 0.95,
+                 gamma: float         = 0.99,
                  epsilon: float       = 1.0,
                  epsilon_min: float   = 0.05,
-                 batch_size: int      = 64,
+                 batch_size: int      = 128,
                  buffer_size: int     = 10_000,
                  target_update: int   = 100):
         super().__init__(agent_id)

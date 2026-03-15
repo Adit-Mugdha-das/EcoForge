@@ -185,9 +185,15 @@ def _q_table_path(agent_id: str) -> str:
 
 
 def _dqn_model_path(agent_id: str) -> str:
-    """Return the filename used to persist a DQN model between runs."""
+    """Return the regular (latest) model path."""
     return os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         f"dqn_model_{agent_id}.pt")
+
+
+def _dqn_best_model_path(agent_id: str) -> str:
+    """Return the best-win-rate model path (saved separately during training)."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        f"dqn_model_{agent_id}_best.pt")
 
 
 def save_learners(agents: dict):
@@ -220,11 +226,18 @@ def build_agent(agent_type: str, agent_id: str):
         return agent
 
     elif agent_type == 'dqn':
-        agent = DQNAgent(agent_id)
-        path  = _dqn_model_path(agent_id)
-        if os.path.exists(path):
+        agent     = DQNAgent(agent_id)
+        best_path = _dqn_best_model_path(agent_id)
+        path      = _dqn_model_path(agent_id)
+
+        # Prefer _best.pt (highest win-rate checkpoint) over latest checkpoint
+        load_path = best_path if os.path.exists(best_path) else path
+
+        if os.path.exists(load_path):
+            which = "best" if load_path == best_path else "latest"
+            print(f"[DQN] Loading {which} model: {load_path}")
             try:
-                agent.load(path)
+                agent.load(load_path)
             except RuntimeError as exc:
                 print(f"[DQN] WARNING: {exc}")
                 print(f"[DQN] Starting untrained — run: python train_dqn.py --agent {agent_id}")
