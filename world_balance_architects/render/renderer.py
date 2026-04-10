@@ -22,10 +22,10 @@ import pygame
 from PIL import Image as PILImage
 
 try:
-    from .animations import WaterAnimator, FloatingText, Particle, CameraShake
+    from .animations import WaterAnimator, FloatingText, Particle, CameraShake, AmbientOrb
 except ImportError:
     # Fallback for direct script execution outside package context.
-    from animations import WaterAnimator, FloatingText, Particle, CameraShake
+    from animations import WaterAnimator, FloatingText, Particle, CameraShake, AmbientOrb
 
 # ── PATH SETUP ────────────────────────────────────────────────────────────────
 _HERE       = os.path.dirname(os.path.abspath(__file__))
@@ -143,10 +143,12 @@ class Renderer:
         self._last_action                   = None   # (row, col, age)
         self._thinking_agent: str | None    = None
         self._ticks = 0
+        self._ambient_orbs: list[AmbientOrb] = []
 
         self._load_fonts()
         self._load_tiles()
         self._build_static_surfaces()
+        self._build_ambient_layer()
 
     def _load_fonts(self):
         pygame.font.init()
@@ -236,6 +238,14 @@ class Renderer:
             pygame.draw.rect(s, (*AGENT_B_COLOR, 200), s.get_rect(), 2)
             self._tile["owner_b"] = s
 
+    def _build_ambient_layer(self):
+        """Create slow-moving glows that keep the board feeling alive."""
+        self._ambient_orbs = [
+            AmbientOrb((GRID_PX_W, GRID_PX_H), (80, 180, 255), 42, (0.35, 0.12)),
+            AmbientOrb((GRID_PX_W, GRID_PX_H), (80, 220, 130), 34, (-0.22, 0.18)),
+            AmbientOrb((GRID_PX_W, GRID_PX_H), (255, 210, 90), 28, (0.18, -0.14)),
+        ]
+
     # ── PUBLIC API ────────────────────────────────────────────────────────────
 
     def set_last_action(self, row: int, col: int):
@@ -270,6 +280,7 @@ class Renderer:
         grid_surf.fill(C_BG)
         self._draw_tiles(grid_surf, world)
         self._draw_owner_tints(grid_surf, world)
+        self._draw_ambient_layer(grid_surf)
         self._draw_grid_lines(grid_surf)
         self._draw_action_highlight(grid_surf)
         self._apply_day_night(grid_surf, world)
@@ -350,6 +361,11 @@ class Renderer:
             copy = hl.copy()
             copy.set_alpha(alpha)
             surf.blit(copy, (c * TILE_SIZE, r * TILE_SIZE))
+
+    def _draw_ambient_layer(self, surf: pygame.Surface):
+        for orb in self._ambient_orbs:
+            orb.update()
+            orb.draw(surf)
 
     def _tick_last_action(self):
         if self._last_action is not None:

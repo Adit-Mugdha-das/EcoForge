@@ -3,24 +3,24 @@
 # =============================================================================
 
 # --- Screen ---
-SCREEN_WIDTH  = 900   # 600px grid + 300px UI panel
-SCREEN_HEIGHT = 640
+SCREEN_WIDTH  = 1480  # 1200px grid + 280px UI panel
+SCREEN_HEIGHT = 900
 FPS           = 60
 TITLE         = "World Balance Architects"
 
 # --- Grid ---
-GRID_WIDTH    = 10
-GRID_HEIGHT   = 10
-TILE_SIZE     = 60    # pixels per tile (10 * 60 = 600px for grid)
+GRID_WIDTH    = 25
+GRID_HEIGHT   = 18
+TILE_SIZE     = 48    # pixels per tile (25 * 48 = 1200px for grid)
 
 # --- Derived layout values ---
-GRID_PIXEL_WIDTH  = GRID_WIDTH  * TILE_SIZE   # 600
-GRID_PIXEL_HEIGHT = GRID_HEIGHT * TILE_SIZE   # 600
-UI_PANEL_X        = GRID_PIXEL_WIDTH          # 600 — where UI panel starts
-UI_PANEL_WIDTH    = SCREEN_WIDTH - UI_PANEL_X  # 300
+GRID_PIXEL_WIDTH  = GRID_WIDTH  * TILE_SIZE   # 1200
+GRID_PIXEL_HEIGHT = GRID_HEIGHT * TILE_SIZE   # 864
+UI_PANEL_X        = GRID_PIXEL_WIDTH          # 1200 — where UI panel starts
+UI_PANEL_WIDTH    = SCREEN_WIDTH - UI_PANEL_X  # 280
 
 # --- Game ---
-MAX_TURNS             = 50
+MAX_TURNS             = 150
 STARTING_ECO_POINTS   = 25
 
 # --- Terrain type constants ---
@@ -29,7 +29,7 @@ TERRAIN_RIVER     = 'river'
 TERRAIN_FARM      = 'farm'
 TERRAIN_FOREST    = 'forest'
 TERRAIN_RESERVOIR = 'reservoir'
-TERRAIN_SOLAR     = 'solar'
+TERRAIN_SOLAR     = 'solar_plant'
 
 # --- Agent identifiers ---
 AGENT_A = 'A'
@@ -103,12 +103,12 @@ METER_COLORS = {
 }
 
 # --- Stability thresholds ---
-STABILITY_HIGH     = 0.8
+STABILITY_HIGH     = 0.75
 STABILITY_MODERATE = 0.5
-STABILITY_LOW      = 0.2
+STABILITY_LOW      = 0.25
 STABILITY_COLLAPSE = 0.15
 
-# --- Initial river tile positions on 10x10 grid ---
+# --- Initial river tile positions on the 25x18 grid ---
 # L-shaped river through the center, equidistant from both agent spawns
 INITIAL_RIVER_TILES = [
     (3, 4),
@@ -120,4 +120,4 @@ INITIAL_RIVER_TILES = [
 
 # --- Agent spawn positions ---
 AGENT_A_SPAWN = (1, 1)
-AGENT_B_SPAWN = (8, 8)
+AGENT_B_SPAWN = (16, 23)

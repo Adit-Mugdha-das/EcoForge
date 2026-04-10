@@ -124,9 +124,50 @@ class CameraShake:
         return (random.randint(-amount, amount), random.randint(-amount, amount))
 
 
+class AmbientOrb:
+    """A slow, looping glow that keeps the board feeling alive between actions."""
+
+    def __init__(
+        self,
+        bounds: tuple[int, int],
+        color: tuple[int, int, int],
+        radius: int,
+        speed: tuple[float, float],
+    ):
+        self.bounds = bounds
+        self.color = color
+        self.radius = radius
+        self.x = random.uniform(0, bounds[0])
+        self.y = random.uniform(0, bounds[1])
+        self.vx, self.vy = speed
+        self.phase = random.uniform(0, 2 * math.pi)
+
+    def update(self) -> None:
+        self.phase += 0.03
+        self.x = (self.x + self.vx) % self.bounds[0]
+        self.y = (self.y + self.vy) % self.bounds[1]
+
+    def draw(self, screen: pygame.Surface) -> None:
+        pulse = 0.55 + 0.45 * math.sin(self.phase)
+        r = max(10, int(self.radius * (0.85 + pulse * 0.25)))
+        alpha = int(24 + 48 * pulse)
+
+        glow = pygame.Surface((r * 6, r * 6), pygame.SRCALPHA)
+        center = (r * 3, r * 3)
+        pygame.draw.circle(glow, (*self.color, alpha // 5), center, r * 3)
+        pygame.draw.circle(glow, (*self.color, alpha // 3), center, int(r * 2.1))
+        pygame.draw.circle(glow, (*self.color, alpha), center, r)
+        screen.blit(
+            glow,
+            (int(self.x) - r * 3, int(self.y) - r * 3),
+            special_flags=pygame.BLEND_RGBA_ADD,
+        )
+
+
 __all__ = [
     "WaterAnimator",
     "FloatingText",
     "Particle",
     "CameraShake",
+    "AmbientOrb",
 ]

@@ -492,7 +492,22 @@ def build_agent(agent_type: str, agent_id: str, agent_params: dict = None):
                          f"Choose from: minimax, montecarlo, qlearning")
 
 
-def run_agent_turn(world: World, agents: dict) -> tuple:
+_ACTION_FX_KEYS = {
+    'PlantForest': 'plant_forest',
+    'BuildCanal': 'build_canal',
+    'BuildReservoir': 'plant_reservoir',
+    'PlantFarm': 'plant_crop',
+    'HarvestCrop': 'harvest_crop',
+    'ClearForest': 'clear_forest',
+    'BuildSolarPlant': 'build_solar',
+}
+
+
+def _get_action_fx_key(action) -> str | None:
+    return _ACTION_FX_KEYS.get(action.__class__.__name__)
+
+
+def run_agent_turn(world: World, agents: dict, renderer: Renderer | None = None) -> tuple:
     """
     Let the current active agent choose and apply its action,
     run world simulation, and switch turns.
@@ -517,12 +532,20 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
     pre_stability = world.stability if is_learner else None
     action_idx    = None
 
+    if renderer is not None:
+        renderer.set_thinking(current)
+        renderer.draw(world)
+        pygame.display.flip()
+
     # Agent chooses its best action — guarded so a crash doesn't kill pygame
     try:
         action, r, c = agent.choose_action(world)
     except Exception as exc:
         print(f"  [WARN] Agent {current} choose_action raised: {exc} — skipping turn")
         action, r, c = None, -1, -1
+    finally:
+        if renderer is not None:
+            renderer.set_thinking(None)
 
     if action is None:
         # No valid moves (or error above) — agent passes this turn
@@ -536,6 +559,10 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
             from engine.actions import apply_action
             log = apply_action(world, current, action, r, c)
             print(f"  {log}")
+            if renderer is not None:
+                fx_key = _get_action_fx_key(action)
+                if fx_key is not None and r >= 0 and c >= 0:
+                    renderer.trigger_action_fx(fx_key, c, r)
         except Exception as exc:
             print(f"  [WARN] Agent {current} apply_action raised: {exc} — skipping turn")
             world.log_action(f"Agent {current} ({agent.name}): action failed")
@@ -649,7 +676,7 @@ def main():
 
                     # Manual step
                     elif event.key == pygame.K_SPACE and not game_over:
-                        game_over, end_reason = run_agent_turn(world, agents)
+                        game_over, end_reason = run_agent_turn(world, agents, renderer)
 
                     # R — save, then return to agent-selection screen
                     elif event.key == pygame.K_r:
@@ -670,13 +697,16 @@ def main():
             # ── Auto-play tick ────────────────────────────────────────────────
             if auto_play and not game_over:
                 if now_ms - last_auto_ms >= auto_delay_ms:
-                    game_over, end_reason = run_agent_turn(world, agents)
+                    game_over, end_reason = run_agent_turn(world, agents, renderer)
                     last_auto_ms = now_ms
                     if game_over:
                         auto_play = False
 
             # ── Draw ──────────────────────────────────────────────────────────
-            renderer.draw(world)
+            if game_over:
+                renderer.draw_game_over(world, world.get_winner())
+            else:
+                renderer.draw(world)
             pygame.display.flip()
             clock.tick(FPS)
 
