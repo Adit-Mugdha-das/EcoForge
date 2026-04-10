@@ -3,20 +3,20 @@
 # =============================================================================
 
 # --- Screen ---
-SCREEN_WIDTH  = 1200  # 800px grid + 400px UI panel (wider stats panel)
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH  = 1000  # keep previous window size
+SCREEN_HEIGHT = 760
 FPS           = 60
-TITLE         = "World Balance Architects"
+TITLE         = "EcoForge"
 
 # --- Grid ---
-GRID_WIDTH    = 25
-GRID_HEIGHT   = 18
-TILE_SIZE     = 32    # pixels per tile (25 * 32 = 800px for grid)
+GRID_WIDTH    = 10
+GRID_HEIGHT   = 10
+TILE_SIZE     = 60    # pixels per tile (10 * 60 = 600px for grid)
 
 # --- Derived layout values ---
-GRID_PIXEL_WIDTH  = GRID_WIDTH  * TILE_SIZE   # 800
-GRID_PIXEL_HEIGHT = GRID_HEIGHT * TILE_SIZE   # 576
-UI_PANEL_X        = GRID_PIXEL_WIDTH          # 800 — where UI panel starts
+GRID_PIXEL_WIDTH  = GRID_WIDTH  * TILE_SIZE   # 600
+GRID_PIXEL_HEIGHT = GRID_HEIGHT * TILE_SIZE   # 600
+UI_PANEL_X        = GRID_PIXEL_WIDTH          # 600 — where UI panel starts
 UI_PANEL_WIDTH    = SCREEN_WIDTH - UI_PANEL_X  # 400
 
 # --- Game ---
@@ -120,4 +120,4 @@ INITIAL_RIVER_TILES = [
 
 # --- Agent spawn positions ---
 AGENT_A_SPAWN = (1, 1)
-AGENT_B_SPAWN = (16, 23)
+AGENT_B_SPAWN = (8, 8)
