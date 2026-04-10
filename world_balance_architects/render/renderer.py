@@ -31,6 +31,10 @@ except ImportError:
 _HERE       = os.path.dirname(os.path.abspath(__file__))
 _ROOT       = os.path.dirname(_HERE)
 ASSETS_DIR  = os.path.join(_ROOT, "assets", "tiles")
+AGENT_ASSET_DIR = os.path.join(_ROOT, "assets", "agent_images")
+
+_AGENT_FILENAME_CACHE: dict[str, str | None] = {}
+_AGENT_IMAGE_CACHE: dict[tuple[str, int], pygame.Surface | None] = {}
 
 # ── IMPORT CONFIG (fall back to sensible defaults) ────────────────────────────
 try:
@@ -130,7 +134,58 @@ def _scale_tile(surf: pygame.Surface, size: int) -> pygame.Surface:
     """Nearest-neighbour upscale — keeps pixel-art crisp."""
     if surf.get_width() == size and surf.get_height() == size:
         return surf
-    return pygame.transform.scale(surf, (size, size))
+    raw = pygame.image.tobytes(surf, "RGBA")
+    pil = PILImage.frombytes("RGBA", surf.get_size(), raw)
+    resized = pil.resize((size, size), PILImage.NEAREST)
+    return _pil_to_pygame(resized)
+
+
+def _resolve_agent_image_filename(agent_type: str) -> str | None:
+    if agent_type in _AGENT_FILENAME_CACHE:
+        return _AGENT_FILENAME_CACHE[agent_type]
+
+    if not os.path.isdir(AGENT_ASSET_DIR):
+        _AGENT_FILENAME_CACHE[agent_type] = None
+        return None
+
+    files = [f for f in os.listdir(AGENT_ASSET_DIR)
+             if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))]
+
+    keys = {
+        "minimax": ["minimax"],
+        "montecarlo": ["montecarlo", "monte_carlo", "monte"],
+        "qlearning": ["qlearning", "q_learning"],
+        "dqn": ["dqn"],
+    }.get(agent_type, [agent_type])
+
+    for f in files:
+        n = f.lower().replace(" ", "").replace("-", "_")
+        if any(k in n for k in keys):
+            _AGENT_FILENAME_CACHE[agent_type] = f
+            return f
+    _AGENT_FILENAME_CACHE[agent_type] = None
+    return None
+
+
+def _load_agent_image(agent_type: str, size: int) -> pygame.Surface | None:
+    cache_key = (agent_type, size)
+    if cache_key in _AGENT_IMAGE_CACHE:
+        return _AGENT_IMAGE_CACHE[cache_key]
+
+    fname = _resolve_agent_image_filename(agent_type)
+    if fname is None:
+        _AGENT_IMAGE_CACHE[cache_key] = None
+        return None
+    path = os.path.join(AGENT_ASSET_DIR, fname)
+    try:
+        surf = pygame.image.load(path).convert_alpha()
+        if surf.get_width() != size or surf.get_height() != size:
+            surf = pygame.transform.scale(surf, (size, size))
+        _AGENT_IMAGE_CACHE[cache_key] = surf
+        return surf
+    except Exception:
+        _AGENT_IMAGE_CACHE[cache_key] = None
+        return None
 
 
 # =============================================================================
@@ -159,11 +214,25 @@ class Renderer:
         self._thinking_agent: str | None    = None
         self._ticks = 0
         self._ambient_orbs: list[AmbientOrb] = []
+        self._agent_types = {AGENT_A: "minimax", AGENT_B: "montecarlo"}
+        self._agent_portraits: dict[str, pygame.Surface | None] = {AGENT_A: None, AGENT_B: None}
+        self._agent_tokens: dict[str, pygame.Surface | None] = {AGENT_A: None, AGENT_B: None}
+        self._agent_mini_tokens: dict[str, pygame.Surface | None] = {AGENT_A: None, AGENT_B: None}
+        self._agent_token_pos = {
+            AGENT_A: [1.5 * TILE_SIZE, 1.5 * TILE_SIZE],
+            AGENT_B: [(GRID_WIDTH - 1.5) * TILE_SIZE, (GRID_HEIGHT - 1.5) * TILE_SIZE],
+        }
+        self._agent_target_pos = {AGENT_A: None, AGENT_B: None}
+        self._agent_action_cell = {AGENT_A: None, AGENT_B: None}
+        self._agent_dock_pending_cell = {AGENT_A: None, AGENT_B: None}
+        self._agent_dock_delay_frames = {AGENT_A: 0, AGENT_B: 0}
 
         self._load_fonts()
         self._load_tiles()
         self._build_static_surfaces()
-        self._build_ambient_layer()
+        # Ambient orbs disabled to avoid distracting bubble-like motion.
+        self._ambient_orbs = []
+        self.set_agent_visuals(self._agent_types)
 
     def _load_fonts(self):
         pygame.font.init()
@@ -175,6 +244,11 @@ class Renderer:
             self.font_md  = pygame.font.Font(pixel_font_path, 16)
             self.font_lg  = pygame.font.Font(pixel_font_path, 22)
             self.font_xl  = pygame.font.Font(pixel_font_path, 30)
+            # Right-panel-specific fonts: intentionally larger for readability.
+            self.ui_xs    = pygame.font.Font(pixel_font_path, 13)
+            self.ui_sm    = pygame.font.Font(pixel_font_path, 16)
+            self.ui_md    = pygame.font.Font(pixel_font_path, 19)
+            self.ui_lg    = pygame.font.Font(pixel_font_path, 25)
             print(f"[FONT] Loaded Pixel Game.otf from: {pixel_font_path}")
         except Exception as e:
             print(f"[FONT] Failed to load {pixel_font_path}: {e}")
@@ -184,6 +258,10 @@ class Renderer:
             self.font_md  = pygame.font.SysFont("Consolas,monospace", 15)
             self.font_lg  = pygame.font.SysFont("Consolas,monospace", 20, bold=True)
             self.font_xl  = pygame.font.SysFont("Consolas,monospace", 28, bold=True)
+            self.ui_xs    = pygame.font.SysFont("Consolas,monospace", 13)
+            self.ui_sm    = pygame.font.SysFont("Consolas,monospace", 16, bold=True)
+            self.ui_md    = pygame.font.SysFont("Consolas,monospace", 19, bold=True)
+            self.ui_lg    = pygame.font.SysFont("Consolas,monospace", 24, bold=True)
 
     def _load_tiles(self):
         """Load pixel-art tile PNGs (generated by Pillow) and scale to TILE_SIZE."""
@@ -193,7 +271,7 @@ class Renderer:
         self._tile: dict[str, pygame.Surface | None] = {
             TERRAIN_LAND:       L("land"),
             TERRAIN_RIVER:      L("river_1"),     # frame 0
-            "river_2":          L("river_2") or _load_preview_sheet_tile("tile_preview_sheet", 2),  # frame 1
+            "river_2":          L("river_2"),  # frame 1
             TERRAIN_FARM:       L("farm"),
             TERRAIN_FOREST:     L("forest"),
             TERRAIN_RESERVOIR:  L("reservoir"),
@@ -256,6 +334,20 @@ class Renderer:
             pygame.draw.rect(s, (*AGENT_B_COLOR, 200), s.get_rect(), 2)
             self._tile["owner_b"] = s
 
+        # Pre-scale tiny legend icons once to avoid per-frame scaling cost.
+        self._legend_icons: dict[str, pygame.Surface] = {}
+        for terrain in [
+            TERRAIN_LAND,
+            TERRAIN_RIVER,
+            TERRAIN_FARM,
+            TERRAIN_FOREST,
+            TERRAIN_RESERVOIR,
+            TERRAIN_SOLAR,
+        ]:
+            tile = self._tile.get(terrain)
+            if tile is not None:
+                self._legend_icons[terrain] = pygame.transform.scale(tile, (14, 14))
+
     def _build_ambient_layer(self):
         """Create slow-moving glows that keep the board feeling alive."""
         self._ambient_orbs = [
@@ -268,7 +360,45 @@ class Renderer:
 
     def set_last_action(self, row: int, col: int):
         """Call after each agent move to highlight that cell."""
-        self._last_action = [row, col, 0]
+        self._last_action = [row, col, 0, "highlight"]
+
+    def set_agent_visuals(self, agent_types: dict[str, str]):
+        """Bind selected agent types to portraits/tokens for panel and map animation."""
+        mini_size = max(8, TILE_SIZE // 4)
+        for agent_id in (AGENT_A, AGENT_B):
+            atype = agent_types.get(agent_id, self._agent_types.get(agent_id, "minimax"))
+            self._agent_types[agent_id] = atype
+            self._agent_portraits[agent_id] = _load_agent_image(atype, 40)
+            self._agent_tokens[agent_id] = _load_agent_image(atype, 24)
+            token = self._agent_tokens[agent_id]
+            self._agent_mini_tokens[agent_id] = (
+                pygame.transform.scale(token, (mini_size, mini_size)) if token is not None else None
+            )
+
+    def move_agent_to(self, agent_id: str, col: int, row: int):
+        """Queue movement toward a target cell before action effects are rendered."""
+        if agent_id not in (AGENT_A, AGENT_B):
+            return
+
+        # Leaving the previous action tile: resume normal-sized traveling token.
+        self._agent_action_cell[agent_id] = None
+        self._agent_dock_pending_cell[agent_id] = None
+        self._agent_dock_delay_frames[agent_id] = 0
+
+        tx = col * TILE_SIZE + TILE_SIZE / 2
+        ty = row * TILE_SIZE + TILE_SIZE / 2
+        pos = self._agent_token_pos[agent_id]
+        dx = tx - pos[0]
+        dy = ty - pos[1]
+        dist = math.hypot(dx, dy)
+
+        # If very far away, pre-position near target so arrival feels synced to the action.
+        if dist > TILE_SIZE * 7 and dist > 0:
+            near_dist = TILE_SIZE * 2.5
+            pos[0] = tx - (dx / dist) * near_dist
+            pos[1] = ty - (dy / dist) * near_dist
+
+        self._agent_target_pos[agent_id] = [tx, ty]
 
     def set_thinking(self, agent: str | None):
         """Pass the current agent name while it's computing; None to clear."""
@@ -298,7 +428,6 @@ class Renderer:
         grid_surf.fill(C_BG)
         self._draw_tiles(grid_surf, world)
         self._draw_owner_tints(grid_surf, world)
-        self._draw_ambient_layer(grid_surf)
         self._draw_grid_lines(grid_surf)
         self._draw_action_highlight(grid_surf)
         self._apply_day_night(grid_surf, world)
@@ -306,6 +435,8 @@ class Renderer:
 
         self.screen.fill(C_BG)
         self.screen.blit(grid_surf, (ox, oy))
+        self._update_agent_tokens()
+        self._draw_agent_tokens(ox, oy)
 
         # Particles and floats drawn directly on screen (not shaken)
         self._update_and_draw_particles()
@@ -313,6 +444,75 @@ class Renderer:
 
         self._draw_ui_panel(world)
         self._tick_last_action()
+
+    def _update_agent_tokens(self):
+        speed = 16.0
+        for agent_id in (AGENT_A, AGENT_B):
+            # Small delay at action cell in normal size before docking to corner.
+            if self._agent_dock_delay_frames[agent_id] > 0:
+                self._agent_dock_delay_frames[agent_id] -= 1
+                if self._agent_dock_delay_frames[agent_id] == 0:
+                    self._agent_action_cell[agent_id] = self._agent_dock_pending_cell[agent_id]
+                    self._agent_dock_pending_cell[agent_id] = None
+
+            target = self._agent_target_pos.get(agent_id)
+            if target is None:
+                continue
+            pos = self._agent_token_pos[agent_id]
+            dx = target[0] - pos[0]
+            dy = target[1] - pos[1]
+            dist = math.hypot(dx, dy)
+            if dist <= speed or dist == 0:
+                pos[0], pos[1] = target[0], target[1]
+                self._agent_target_pos[agent_id] = None
+            else:
+                pos[0] += dx / dist * speed
+                pos[1] += dy / dist * speed
+
+    def _draw_agent_tokens(self, ox: int, oy: int):
+        for agent_id in (AGENT_A, AGENT_B):
+            # After an action, keep a small docked token in the tile corner
+            # until the agent starts moving for its next action.
+            if self._agent_target_pos[agent_id] is None and self._agent_action_cell[agent_id] is not None:
+                col, row = self._agent_action_cell[agent_id]
+                cell_x = int(col * TILE_SIZE + ox)
+                cell_y = int(row * TILE_SIZE + oy)
+
+                token = self._agent_tokens.get(agent_id)
+                if token is not None:
+                    mini = self._agent_mini_tokens.get(agent_id)
+                    if mini is None:
+                        continue
+                    if agent_id == AGENT_A:
+                        draw_x = cell_x + 2
+                    else:
+                        draw_x = cell_x + TILE_SIZE - mini.get_width() - 2
+                    draw_y = cell_y + 2
+                    self.screen.blit(mini, (draw_x, draw_y))
+                    # thin outline helps visibility while keeping action art readable
+                    pygame.draw.rect(
+                        self.screen,
+                        (250, 250, 250),
+                        (draw_x - 1, draw_y - 1, mini.get_width() + 2, mini.get_height() + 2),
+                        1,
+                    )
+                else:
+                    color = AGENT_A_COLOR if agent_id == AGENT_A else AGENT_B_COLOR
+                    if agent_id == AGENT_A:
+                        cx = cell_x + 6
+                    else:
+                        cx = cell_x + TILE_SIZE - 6
+                    cy = cell_y + 6
+                    pygame.draw.circle(self.screen, color, (cx, cy), 4)
+                continue
+
+            px, py = self._agent_token_pos[agent_id]
+            token = self._agent_tokens.get(agent_id)
+            if token is not None:
+                self.screen.blit(token, (int(px - token.get_width() // 2 + ox), int(py - token.get_height() // 2 + oy)))
+            else:
+                color = AGENT_A_COLOR if agent_id == AGENT_A else AGENT_B_COLOR
+                pygame.draw.circle(self.screen, color, (int(px + ox), int(py + oy)), 8)
 
     def draw_game_over(self, world, winner: str):
         """Call instead of draw() on the final frame."""
@@ -322,15 +522,27 @@ class Renderer:
     # ── TILE DRAWING ──────────────────────────────────────────────────────────
 
     def _draw_tiles(self, surf: pygame.Surface, world):
-        river_key = "river_2" if self._water.frame else TERRAIN_RIVER
         for r in range(GRID_HEIGHT):
             for c in range(GRID_WIDTH):
                 cell    = world.grid[r][c]
                 terrain = cell.terrain
-                key     = river_key if terrain == TERRAIN_RIVER else terrain
+                if terrain == TERRAIN_RIVER:
+                    # Alternate frame phase per cell for a more natural wave field.
+                    river_frame = self._water.frame ^ ((r + c) & 1)
+                    key = "river_2" if river_frame else TERRAIN_RIVER
+                else:
+                    key = terrain
                 tile    = self._tile.get(key) or self._tile.get(terrain)
                 if tile:
                     surf.blit(tile, (c * TILE_SIZE, r * TILE_SIZE))
+
+                # Reservoir tile: animate only the inner water body.
+                if terrain == TERRAIN_RESERVOIR:
+                    self._draw_reservoir_inner_water(surf, c, r)
+
+                # Solar tile: subtle moving glint across panel cells.
+                if terrain == TERRAIN_SOLAR:
+                    self._draw_solar_glint(surf, c, r)
 
                 # Stage / maturity overlays
                 if terrain == TERRAIN_FARM:
@@ -338,13 +550,60 @@ class Renderer:
                     if 1 <= s <= 3:
                         ov = self._tile.get(f"farm_s{s}")
                         if ov:
-                            surf.blit(ov, (c * TILE_SIZE, r * TILE_SIZE))
+                            pulse = 0.90 + 0.10 * math.sin(self._ticks * 0.10 + r * 0.25 + c * 0.17)
+                            alpha = {1: 150, 2: 195, 3: 225}.get(s, 180)
+                            copy = ov.copy()
+                            copy.set_alpha(int(alpha * pulse))
+                            surf.blit(copy, (c * TILE_SIZE, r * TILE_SIZE))
                 elif terrain == TERRAIN_FOREST:
                     m = getattr(cell, "forest_maturity", 1)
                     if m >= 2:
                         ov = self._tile.get(f"forest_m{min(m,3)}")
                         if ov:
-                            surf.blit(ov, (c * TILE_SIZE, r * TILE_SIZE))
+                            pulse = 0.92 + 0.08 * math.sin(self._ticks * 0.08 + r * 0.21 + c * 0.13)
+                            alpha = {2: 190, 3: 220}.get(m, 190)
+                            copy = ov.copy()
+                            copy.set_alpha(int(alpha * pulse))
+                            surf.blit(copy, (c * TILE_SIZE, r * TILE_SIZE))
+
+    def _draw_reservoir_inner_water(self, surf: pygame.Surface, col: int, row: int):
+        """Animate the water area inside the stone reservoir walls."""
+        x = col * TILE_SIZE
+        y = row * TILE_SIZE
+
+        src = self._tile.get("river_2" if self._water.frame else TERRAIN_RIVER)
+        if src is None:
+            return
+
+        # Inner basin area of the reservoir tile art.
+        water_rect = pygame.Rect(x + 7, y + 9, TILE_SIZE - 14, TILE_SIZE - 18)
+
+        # Draw into a local clipped surface first, so water never spills outside.
+        basin = pygame.Surface((water_rect.w, water_rect.h), pygame.SRCALPHA)
+
+        # Scroll ripple pattern slowly for animated inner water feel.
+        offset = int((self._ticks * 0.45 + (row * 3 + col * 2)) % TILE_SIZE)
+        for dx in (-offset, TILE_SIZE - offset):
+            basin.blit(src, (dx, 0), area=pygame.Rect(0, 0, TILE_SIZE, water_rect.h))
+
+        # Slightly dim the water so stone borders remain visually dominant.
+        tone = pygame.Surface((water_rect.w, water_rect.h), pygame.SRCALPHA)
+        tone.fill((255, 255, 255, 180))
+        basin.blit(tone, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+
+        surf.blit(basin, water_rect.topleft)
+
+    def _draw_solar_glint(self, surf: pygame.Surface, col: int, row: int):
+        """Add a faint periodic glint over solar panel cells."""
+        t = (self._ticks + col * 9 + row * 6) % 48
+        if t > 20:
+            return
+        x = col * TILE_SIZE
+        y = row * TILE_SIZE
+        glint = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+        gx = 8 + t
+        pygame.draw.line(glint, (190, 230, 255, 42), (gx, 10), (gx - 8, TILE_SIZE - 10), 2)
+        surf.blit(glint, (x, y))
 
     def _draw_owner_tints(self, surf: pygame.Surface, world):
         for r in range(GRID_HEIGHT):
@@ -370,14 +629,19 @@ class Renderer:
     def _draw_action_highlight(self, surf: pygame.Surface):
         if self._last_action is None:
             return
-        r, c, age = self._last_action
+        r, c, age = self._last_action[0], self._last_action[1], self._last_action[2]
         if age > 35:
             return
         alpha = int(255 * (1 - age / 35))
-        hl    = self._tile.get("highlight")
+        style = self._last_action[3] if len(self._last_action) > 3 else "highlight"
+        hl    = self._tile.get(style) or self._tile.get("highlight")
         if hl:
             copy = hl.copy()
+            pulse = 0.85 + 0.15 * math.sin(self._ticks * 0.35)
             copy.set_alpha(alpha)
+            glow = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+            glow.fill((255, 255, 255, int(28 * pulse)))
+            surf.blit(glow, (c * TILE_SIZE, r * TILE_SIZE), special_flags=pygame.BLEND_RGBA_ADD)
             surf.blit(copy, (c * TILE_SIZE, r * TILE_SIZE))
 
     def _draw_ambient_layer(self, surf: pygame.Surface):
@@ -440,18 +704,18 @@ class Renderer:
         uw = pw - 32
 
         # ── Title ──
-        title = self.font_lg.render("WORLD BALANCE", True, C_TEXT_BRIGHT)
+        title = self.ui_lg.render("WORLD BALANCE", False, C_TEXT_BRIGHT)
         self.screen.blit(title, (x, y))
-        y += 24
-        sub = self.font_xs.render("A R C H I T E C T S", True, C_ACCENT)
+        y += 30
+        sub = self.ui_xs.render("A R C H I T E C T S", False, C_ACCENT)
         self.screen.blit(sub, (x + 2, y))
-        y += 24
+        y += 22
 
         self._divider(x, y, uw); y += 10
 
         # ── Planet Meters ──
-        label_h = self.font_xs.render("PLANETARY STATUS", True, C_TEXT_DIM)
-        self.screen.blit(label_h, (x, y)); y += 14
+        label_h = self.ui_xs.render("PLANETARY STATUS", False, C_TEXT_DIM)
+        self.screen.blit(label_h, (x, y)); y += 18
 
         meters = [
             ("WATER",  getattr(world, "water_level", 50),  METER_COLORS["water"]),
@@ -468,11 +732,11 @@ class Renderer:
         # ── Stability ──
         stab = getattr(world, "stability", 0.5)
         stab_col = self._stability_color(stab)
-        sl = self.font_xs.render("STABILITY", True, C_TEXT_DIM)
-        sv = self.font_md.render(f"{stab:.2f}", True, stab_col)
+        sl = self.ui_xs.render("STABILITY", False, C_TEXT_DIM)
+        sv = self.ui_md.render(f"{stab:.2f}", False, stab_col)
         self.screen.blit(sl, (x, y))
         self.screen.blit(sv, (x + uw - sv.get_width(), y - 1))
-        y += 18
+        y += 22
         # Stability bar
         self._draw_bar(x, y, uw, 12, stab, stab_col, bg=(25,30,50))
         y += 20
@@ -481,51 +745,61 @@ class Renderer:
 
         # ── Turn info ──
         turn = getattr(world, "turn", 0)
-        tl   = self.font_sm.render(f"TURN  {turn} / {MAX_TURNS}", True, C_TEXT)
-        self.screen.blit(tl, (x, y)); y += 20
+        tl   = self.ui_sm.render(f"TURN  {turn} / {MAX_TURNS}", False, C_TEXT)
+        self.screen.blit(tl, (x, y)); y += 24
 
         cur_agent = getattr(world, "current_agent", AGENT_A)
         ac        = AGENT_A_COLOR if cur_agent == AGENT_A else AGENT_B_COLOR
-        atl       = self.font_sm.render(f"ACTIVE: Agent {cur_agent}", True, ac)
+        atl       = self.ui_sm.render(f"ACTIVE: Agent {cur_agent}", False, ac)
         self.screen.blit(atl, (x, y))
         if self._thinking_agent:
             self._draw_thinking_dot(x + uw - 18, y + 6, ac)
-        y += 22
+        y += 26
 
         self._divider(x, y, uw); y += 10
 
         # ── Scores ──
         scores = getattr(world, "scores", {AGENT_A: 0, AGENT_B: 0})
         eco    = getattr(world, "eco_points", {AGENT_A: 10, AGENT_B: 10})
-        sc_l   = self.font_xs.render("SCORES", True, C_TEXT_DIM)
-        self.screen.blit(sc_l, (x, y)); y += 14
+        sc_l   = self.ui_xs.render("SCORES", False, C_TEXT_DIM)
+        self.screen.blit(sc_l, (x, y)); y += 18
 
         for agent, color in [(AGENT_A, AGENT_A_COLOR),(AGENT_B, AGENT_B_COLOR)]:
+            row_top = y
             max_score = max((*scores.values(), 1))
             bar_w = int(uw * min(1.0, scores.get(agent,0) / max_score))
             # Score bar background
-            pygame.draw.rect(self.screen, (30,35,55), (x, y, uw, 18), border_radius=3)
+            pygame.draw.rect(self.screen, (30,35,55), (x, row_top, uw, 18), border_radius=3)
             if bar_w > 0:
-                pygame.draw.rect(self.screen, (*color, 180), (x, y, bar_w, 18), border_radius=3)
-            name_s = self.font_sm.render(f"Agent {agent}", True, C_TEXT_BRIGHT)
-            val_s  = self.font_sm.render(f"{scores.get(agent,0):.1f}", True, C_TEXT_BRIGHT)
-            eco_s  = self.font_xs.render(f"eco:{eco.get(agent,0)}", True, C_TEXT_DIM)
-            self.screen.blit(name_s, (x + 5, y + 1))
-            self.screen.blit(val_s,  (x + uw - val_s.get_width() - 5, y + 1))
-            self.screen.blit(eco_s,  (x + 5, y + 20))
-            y += 38
+                pygame.draw.rect(self.screen, (*color, 180), (x, row_top, bar_w, 18), border_radius=3)
+            portrait = self._agent_portraits.get(agent)
+            row_h = 56
+            if portrait is not None:
+                self.screen.blit(portrait, (x + 4, row_top + 22))
+                text_x = x + 50
+                row_h = max(row_h, portrait.get_height() + 26)
+            else:
+                text_x = x + 5
+            name_s = self.ui_sm.render(f"Agent {agent}", False, C_TEXT_BRIGHT)
+            val_s  = self.ui_sm.render(f"{scores.get(agent,0):.1f}", False, C_TEXT_BRIGHT)
+            atype  = self._agent_types.get(agent, "")
+            eco_s  = self.ui_xs.render(f"eco:{eco.get(agent,0)}  {atype}", False, C_TEXT_DIM)
+            self.screen.blit(name_s, (text_x, row_top + 1))
+            self.screen.blit(val_s,  (x + uw - val_s.get_width() - 5, row_top + 1))
+            self.screen.blit(eco_s,  (text_x, row_top + 24))
+            y += row_h + 8
 
         self._divider(x, y, uw); y += 10
 
         # ── Action Log ──
-        log_l = self.font_xs.render("ACTION LOG", True, C_TEXT_DIM)
-        self.screen.blit(log_l, (x, y)); y += 14
+        log_l = self.ui_xs.render("ACTION LOG", False, C_TEXT_DIM)
+        self.screen.blit(log_l, (x, y)); y += 18
         log   = getattr(world, "action_log", [])
-        for i, entry in enumerate(log[-7:]):
+        for i, entry in enumerate(log[-5:]):
             # Alternate slightly different brightnesses
-            shade = C_TEXT if i == len(log[-7:])-1 else C_TEXT_DIM
-            line  = self.font_xs.render(entry[:36], True, shade)
-            self.screen.blit(line, (x, y)); y += 15
+            shade = C_TEXT if i == len(log[-5:])-1 else C_TEXT_DIM
+            line  = self.ui_xs.render(entry[:42], False, shade)
+            self.screen.blit(line, (x, y)); y += 17
 
         # ── Legend ──
         if y < SCREEN_HEIGHT - 100:
@@ -541,11 +815,10 @@ class Renderer:
             ]
             legend_x = x
             for terrain, name in legend:
-                tile = self._tile.get(terrain)
-                if tile:
-                    sm = pygame.transform.scale(tile, (14,14))
+                sm = self._legend_icons.get(terrain)
+                if sm:
                     self.screen.blit(sm, (legend_x, y))
-                lbl = self.font_xs.render(name, True, C_TEXT_DIM)
+                lbl = self.ui_xs.render(name, False, C_TEXT_DIM)
                 self.screen.blit(lbl, (legend_x + 17, y + 1))
                 legend_x += lbl.get_width() + 26
                 if legend_x > px + pw - 40:
@@ -571,24 +844,24 @@ class Renderer:
         self.screen.blit(box, (cx - box_w//2, cy - box_h//2))
 
         # Winner text
-        win_t = self.font_xl.render(f"AGENT {winner} WINS", True, C_GOLD)
+        win_t = self.font_xl.render(f"AGENT {winner} WINS", False, C_GOLD)
         self.screen.blit(win_t, win_t.get_rect(center=(cx, cy - 60)))
 
         # Stability
         stab   = getattr(world, "stability", 0.5)
         stab_c = self._stability_color(stab)
-        st_t   = self.font_md.render(f"Final Stability: {stab:.2f}", True, stab_c)
+        st_t   = self.font_md.render(f"Final Stability: {stab:.2f}", False, stab_c)
         self.screen.blit(st_t, st_t.get_rect(center=(cx, cy - 20)))
 
         # Scores
         scores = getattr(world, "scores", {AGENT_A: 0, AGENT_B: 0})
         for i, (agent, color) in enumerate([(AGENT_A,AGENT_A_COLOR),(AGENT_B,AGENT_B_COLOR)]):
             s = self.font_md.render(
-                f"Agent {agent}: {scores.get(agent,0):.1f}", True, color)
+                f"Agent {agent}: {scores.get(agent,0):.1f}", False, color)
             self.screen.blit(s, s.get_rect(center=(cx + (i*2-1)*100, cy + 20)))
 
         restart = self.font_sm.render("Press R to restart  /  ESC to quit",
-                                      True, C_TEXT_DIM)
+                                      False, C_TEXT_DIM)
         self.screen.blit(restart, restart.get_rect(center=(cx, cy + 60)))
 
     # ── WIDGET HELPERS ────────────────────────────────────────────────────────
@@ -607,12 +880,12 @@ class Renderer:
             )
 
         # Label row
-        lbl = self.font_xs.render(label, True, C_TEXT_DIM)
-        val = self.font_xs.render(
-            f"{'⚠ ' if is_critical else ''}{value:.1f}", True, draw_color)
+        lbl = self.ui_xs.render(label, False, C_TEXT_DIM)
+        val = self.ui_xs.render(
+            f"{'⚠ ' if is_critical else ''}{value:.1f}", False, draw_color)
         self.screen.blit(lbl, (x, y))
         self.screen.blit(val, (x + width - val.get_width(), y))
-        y += 14
+        y += self.ui_xs.get_height() + 3
 
         self._draw_bar(x, y, width, 8, value / 100.0, draw_color)
         return y + 8
@@ -659,11 +932,22 @@ class Renderer:
         "clear_forest":   ("-O₂",     (255, 100,  60), (180,  40,  20)),
     }
 
-    def trigger_action_fx(self, action_name: str, col: int, row: int):
+    def trigger_action_fx(self, action_name: str, col: int, row: int, agent_id: str | None = None):
         """Spawn FloatingText + particles matching the action type."""
         fx = self.ACTION_FX.get(action_name)
         if fx:
             text, text_color, particle_color = fx
             self.add_float(text, col, row, text_color)
             self.add_particles(col, row, particle_color, count=10)
+            # Use standard last-action highlight for played moves.
             self.set_last_action(row, col)
+            if agent_id in (AGENT_A, AGENT_B):
+                # Action has landed: stop travel and dock in this tile's corner.
+                self._agent_target_pos[agent_id] = None
+                self._agent_action_cell[agent_id] = None
+                self._agent_dock_pending_cell[agent_id] = (col, row)
+                self._agent_dock_delay_frames[agent_id] = 30
+                self._agent_token_pos[agent_id] = [
+                    col * TILE_SIZE + TILE_SIZE / 2,
+                    row * TILE_SIZE + TILE_SIZE / 2,
+                ]

@@ -3,7 +3,7 @@
 # =============================================================================
 
 # --- Screen ---
-SCREEN_WIDTH  = 1000  # 800px grid + 200px UI panel
+SCREEN_WIDTH  = 1200  # 800px grid + 400px UI panel (wider stats panel)
 SCREEN_HEIGHT = 600
 FPS           = 60
 TITLE         = "World Balance Architects"
@@ -17,7 +17,7 @@ TILE_SIZE     = 32    # pixels per tile (25 * 32 = 800px for grid)
 GRID_PIXEL_WIDTH  = GRID_WIDTH  * TILE_SIZE   # 800
 GRID_PIXEL_HEIGHT = GRID_HEIGHT * TILE_SIZE   # 576
 UI_PANEL_X        = GRID_PIXEL_WIDTH          # 800 — where UI panel starts
-UI_PANEL_WIDTH    = SCREEN_WIDTH - UI_PANEL_X  # 200
+UI_PANEL_WIDTH    = SCREEN_WIDTH - UI_PANEL_X  # 400
 
 # --- Game ---
 MAX_TURNS             = 150

@@ -64,7 +64,7 @@ class FloatingText:
         if not self.alive:
             return
         alpha = int(255 * max(0, 1 - self.age / self.LIFETIME))
-        surface = font.render(self.text, True, self.color)
+        surface = font.render(self.text, False, self.color)
         surface.set_alpha(alpha)
         screen.blit(surface, surface.get_rect(center=(int(self.x), int(self.y))))
 
