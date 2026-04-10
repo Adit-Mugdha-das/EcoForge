@@ -196,7 +196,7 @@ class CameraShake:
 def _pil_to_pygame(pil_img: PILImage.Image) -> pygame.Surface:
     """Convert a PIL RGBA image to a pygame Surface."""
     raw  = pil_img.convert("RGBA").tobytes()
-    surf = pygame.image.fromstring(raw, pil_img.size, "RGBA").convert_alpha()
+    surf = pygame.image.frombytes(raw, pil_img.size, "RGBA").convert_alpha()
     return surf
 
 
