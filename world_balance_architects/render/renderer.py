@@ -17,9 +17,15 @@
 # =============================================================================
 
 from __future__ import annotations
-import math, random, os, sys
+import math, os, sys
 import pygame
 from PIL import Image as PILImage
+
+try:
+    from .animations import WaterAnimator, FloatingText, Particle, CameraShake
+except ImportError:
+    # Fallback for direct script execution outside package context.
+    from animations import WaterAnimator, FloatingText, Particle, CameraShake
 
 # ── PATH SETUP ────────────────────────────────────────────────────────────────
 _HERE       = os.path.dirname(os.path.abspath(__file__))
@@ -84,109 +90,6 @@ DAY_TINTS = [
     ( 40,  50, 110, 70 ),   # night    — deep blue
     (180, 130, 200, 35 ),   # dawn     — soft violet
 ]
-
-
-# =============================================================================
-# HELPER SYSTEMS
-# =============================================================================
-
-class WaterAnimator:
-    """Alternates between two river-tile frames every N ticks."""
-    def __init__(self, fps_interval: int = 28):
-        self._tick     = 0
-        self._interval = fps_interval
-        self._frame    = 0
-
-    def update(self):
-        self._tick += 1
-        if self._tick >= self._interval:
-            self._tick  = 0
-            self._frame = 1 - self._frame
-
-    @property
-    def frame(self) -> int:
-        return self._frame
-
-
-class FloatingText:
-    """A line of text that rises and fades out over `lifetime` frames."""
-    LIFETIME = 52
-
-    def __init__(self, text: str, world_col: int, world_row: int,
-                 color: tuple = (255, 255, 200)):
-        self.text    = text
-        self.color   = color
-        self.age     = 0
-        # screen position — centre of the tile, plus a random horizontal jitter
-        self.x = float(world_col * TILE_SIZE + TILE_SIZE // 2
-                        + random.randint(-6, 6))
-        self.y = float(world_row * TILE_SIZE + TILE_SIZE // 2)
-
-    def update(self):
-        self.age += 1
-        self.y   -= 1.4   # float upward
-
-    @property
-    def alive(self) -> bool:
-        return self.age < self.LIFETIME
-
-    def draw(self, screen: pygame.Surface, font: pygame.font.Font):
-        if not self.alive:
-            return
-        alpha = int(255 * max(0, 1 - self.age / self.LIFETIME))
-        surf  = font.render(self.text, True, self.color)
-        surf.set_alpha(alpha)
-        screen.blit(surf, surf.get_rect(center=(int(self.x), int(self.y))))
-
-
-class Particle:
-    """A single coloured dot that shoots outward, fades, and dies."""
-    def __init__(self, pos: tuple, color: tuple):
-        angle  = random.uniform(0, 2 * math.pi)
-        speed  = random.uniform(1.8, 4.0)
-        self.x, self.y = float(pos[0]), float(pos[1])
-        self.vx = math.cos(angle) * speed
-        self.vy = math.sin(angle) * speed - 1.8   # slight upward bias
-        self.color = color
-        self.age   = 0
-        self.life  = random.randint(28, 42)
-
-    def update(self):
-        self.x  += self.vx
-        self.y  += self.vy
-        self.vy += 0.12   # gravity
-        self.age += 1
-
-    @property
-    def alive(self) -> bool:
-        return self.age < self.life
-
-    def draw(self, screen: pygame.Surface):
-        if not self.alive:
-            return
-        alpha = int(255 * (1 - self.age / self.life))
-        r     = max(1, 4 - self.age // 10)
-        surf  = pygame.Surface((r*2, r*2), pygame.SRCALPHA)
-        pygame.draw.circle(surf, (*self.color, alpha), (r, r), r)
-        screen.blit(surf, (int(self.x) - r, int(self.y) - r))
-
-
-class CameraShake:
-    """Brief screen shake — call trigger() then apply offset() each frame."""
-    def __init__(self):
-        self._amount  = 0
-        self._frames  = 0
-
-    def trigger(self, amount: int = 5, frames: int = 18):
-        self._amount = amount
-        self._frames = frames
-
-    def offset(self) -> tuple[int, int]:
-        if self._frames <= 0:
-            return (0, 0)
-        self._frames -= 1
-        a = self._amount
-        return (random.randint(-a, a), random.randint(-a, a))
 
 
 # =============================================================================
@@ -345,7 +248,7 @@ class Renderer:
 
     def add_float(self, text: str, col: int, row: int,
                   color: tuple = (255, 255, 200)):
-        self._floats.append(FloatingText(text, col, row, color))
+        self._floats.append(FloatingText(text, col, row, TILE_SIZE, color))
 
     def add_particles(self, col: int, row: int, color: tuple, count: int = 8):
         cx = col * TILE_SIZE + TILE_SIZE // 2
