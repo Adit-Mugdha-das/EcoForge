@@ -111,6 +111,21 @@ def _load_tile(name: str) -> pygame.Surface | None:
     return _pil_to_pygame(pil)
 
 
+def _load_preview_sheet_tile(sheet_name: str, index: int) -> pygame.Surface | None:
+    """Crop a 48x48 tile from a preview sheet when the standalone tile is missing."""
+    path = os.path.join(ASSETS_DIR, f"{sheet_name}.png")
+    if not os.path.exists(path):
+        return None
+
+    pil = PILImage.open(path).convert("RGBA")
+    tile_size = 48
+    left = index * tile_size
+    box = (left, 0, left + tile_size, tile_size)
+    if box[2] > pil.width or box[3] > pil.height:
+        return None
+    return _pil_to_pygame(pil.crop(box))
+
+
 def _scale_tile(surf: pygame.Surface, size: int) -> pygame.Surface:
     """Nearest-neighbour upscale — keeps pixel-art crisp."""
     if surf.get_width() == size and surf.get_height() == size:
@@ -153,14 +168,17 @@ class Renderer:
     def _load_fonts(self):
         pygame.font.init()
         # Try to load a pixel font; fall back to built-in
-        pixel_font_path = os.path.join(ASSETS_DIR, "..", "fonts", "pixel.ttf")
+        pixel_font_path = os.path.join(_ROOT, "assets", "fonts", "Pixel Game.otf")
         try:
             self.font_xs  = pygame.font.Font(pixel_font_path, 10)
             self.font_sm  = pygame.font.Font(pixel_font_path, 13)
             self.font_md  = pygame.font.Font(pixel_font_path, 16)
             self.font_lg  = pygame.font.Font(pixel_font_path, 22)
             self.font_xl  = pygame.font.Font(pixel_font_path, 30)
-        except Exception:
+            print(f"[FONT] Loaded Pixel Game.otf from: {pixel_font_path}")
+        except Exception as e:
+            print(f"[FONT] Failed to load {pixel_font_path}: {e}")
+            print(f"[FONT] Fallback to Consolas,monospace")
             self.font_xs  = pygame.font.SysFont("Consolas,monospace", 11)
             self.font_sm  = pygame.font.SysFont("Consolas,monospace", 13)
             self.font_md  = pygame.font.SysFont("Consolas,monospace", 15)
@@ -175,7 +193,7 @@ class Renderer:
         self._tile: dict[str, pygame.Surface | None] = {
             TERRAIN_LAND:       L("land"),
             TERRAIN_RIVER:      L("river_1"),     # frame 0
-            "river_2":          L("river_2"),      # frame 1
+            "river_2":          L("river_2") or _load_preview_sheet_tile("tile_preview_sheet", 2),  # frame 1
             TERRAIN_FARM:       L("farm"),
             TERRAIN_FOREST:     L("forest"),
             TERRAIN_RESERVOIR:  L("reservoir"),
@@ -483,7 +501,8 @@ class Renderer:
         self.screen.blit(sc_l, (x, y)); y += 14
 
         for agent, color in [(AGENT_A, AGENT_A_COLOR),(AGENT_B, AGENT_B_COLOR)]:
-            bar_w = int(uw * min(1.0, scores.get(agent,0) / max(scores.values() or [1])))
+            max_score = max((*scores.values(), 1))
+            bar_w = int(uw * min(1.0, scores.get(agent,0) / max_score))
             # Score bar background
             pygame.draw.rect(self.screen, (30,35,55), (x, y, uw, 18), border_radius=3)
             if bar_w > 0:

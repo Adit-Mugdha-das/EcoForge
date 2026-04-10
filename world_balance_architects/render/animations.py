@@ -35,7 +35,7 @@ class WaterAnimator:
 class FloatingText:
     """A text label that rises and fades over a fixed lifetime."""
 
-    LIFETIME = 52
+    LIFETIME = 85  # Increased from 52 for longer visibility
 
     def __init__(
         self,
@@ -54,7 +54,7 @@ class FloatingText:
 
     def update(self) -> None:
         self.age += 1
-        self.y -= 1.4
+        self.y -= 0.8  # Reduced from 1.4 for slower rise
 
     @property
     def alive(self) -> bool:
