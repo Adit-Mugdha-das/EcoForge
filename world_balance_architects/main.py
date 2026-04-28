@@ -6,8 +6,9 @@
 # Available agents: minimax | montecarlo | qlearning | dqn
 #
 # Controls (in-game):
-#   SPACE      — step one agent turn manually
-#   A          — toggle auto-play (agents play continuously)
+#   SPACE      — pause/resume auto-play
+#   N          — step one turn (when paused)
+#   A          — toggle auto-play (legacy alias)
 #   R          — reset / return to agent selection
 #   ESC        — quit
 #   +  /  -    — auto-play speed up / slow down
@@ -16,6 +17,8 @@
 import pygame
 import sys
 import os
+import threading
+import time
 
 from config import *
 from engine.world import World
@@ -46,120 +49,270 @@ _AGENT_OPTIONS = [
     ('dqn',        'DQN',         'Deep neural network RL'),
 ]
 
+_AGENT_CARD_IMAGE_CACHE: dict[int, dict[str, pygame.Surface | None]] = {}
+_MENU_BG_CACHE: dict[tuple[int, int], pygame.Surface | None] = {}
+
+
+def _ui_font(size: int, bold: bool = False) -> pygame.font.Font:
+    """Load the project pixel font for all game UI screens, with safe fallback."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(base_dir, "assets", "fonts", "Pixel Game.otf"),
+        os.path.join(base_dir, "assets", "fonts", "pixel.ttf"),
+    ]
+
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return pygame.font.Font(path, size)
+            except Exception:
+                pass
+
+    return pygame.font.SysFont("Consolas,monospace", size, bold=bold)
+
+
+def _load_agent_images(card_image_size: int = 92) -> dict[str, pygame.Surface | None]:
+    """Load character images for each agent option from assets/agent_images."""
+    cached = _AGENT_CARD_IMAGE_CACHE.get(card_image_size)
+    if cached is not None:
+        return cached
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    images_dir = os.path.join(base_dir, "assets", "agent_images")
+    loaded: dict[str, pygame.Surface | None] = {k: None for k, _l, _d in _AGENT_OPTIONS}
+
+    if not os.path.isdir(images_dir):
+        _AGENT_CARD_IMAGE_CACHE[card_image_size] = loaded
+        return loaded
+
+    files = [f for f in os.listdir(images_dir) if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))]
+
+    for atype, _label, _desc in _AGENT_OPTIONS:
+        keyword = atype.replace("_", "")
+        match = None
+        for fname in files:
+            normalized = fname.lower().replace("_", "").replace(" ", "")
+            if keyword in normalized:
+                match = fname
+                break
+        if match is None and atype == "montecarlo":
+            for fname in files:
+                normalized = fname.lower().replace("_", "").replace(" ", "")
+                if "montecarlo" in normalized or "monte" in normalized:
+                    match = fname
+                    break
+
+        if match is not None:
+            path = os.path.join(images_dir, match)
+            try:
+                surf = pygame.image.load(path).convert_alpha()
+                surf = pygame.transform.scale(surf, (card_image_size, card_image_size))
+                loaded[atype] = surf
+            except Exception:
+                loaded[atype] = None
+
+    _AGENT_CARD_IMAGE_CACHE[card_image_size] = loaded
+    return loaded
+
+
+def _load_menu_background(size: tuple[int, int]) -> pygame.Surface | None:
+    """Load and scale hero background for menu-like screens."""
+    if size in _MENU_BG_CACHE:
+        return _MENU_BG_CACHE[size]
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    bg_path = os.path.join(base_dir, "assets", "bgs", "hero bg.png")
+    if not os.path.exists(bg_path):
+        _MENU_BG_CACHE[size] = None
+        return None
+
+    try:
+        bg = pygame.image.load(bg_path).convert()
+        if bg.get_size() != size:
+            bg = pygame.transform.scale(bg, size)
+        _MENU_BG_CACHE[size] = bg
+        return bg
+    except Exception:
+        _MENU_BG_CACHE[size] = None
+        return None
+
 
 def run_selection_screen(screen, clock):
     """
-    Display an interactive agent-selection screen.
-    The user clicks one button per column to pick Agent A and Agent B,
-    then clicks Start.  Returns (a_type, b_type) as strings.
+    Display a two-page interactive agent-selection screen.
+    Page 1 selects Agent A. Page 2 selects Agent B.
+    Returns (a_type, b_type) as strings.
     """
-    # ── Fonts ──────────────────────────────────────────────────────────────────
-    f_title  = pygame.font.SysFont('Segoe UI', 34, bold=True)
-    f_sub    = pygame.font.SysFont('Segoe UI', 17)
-    f_head   = pygame.font.SysFont('Segoe UI', 21, bold=True)
-    f_btn    = pygame.font.SysFont('Segoe UI', 17, bold=True)
-    f_desc   = pygame.font.SysFont('Segoe UI', 13)
-    f_start  = pygame.font.SysFont('Segoe UI', 19, bold=True)
+    f_title   = _ui_font(34, bold=True)
+    f_sub     = _ui_font(17)
+    f_step    = _ui_font(16, bold=True)
+    f_btn     = _ui_font(18, bold=True)
+    f_desc    = _ui_font(13)
+    f_small   = _ui_font(12)
 
-    # ── Layout ─────────────────────────────────────────────────────────────────
-    COL_A_CX  = SCREEN_WIDTH // 4        # 225 — Agent A column centre
-    COL_B_CX  = SCREEN_WIDTH * 3 // 4   # 675 — Agent B column centre
-    BTN_W, BTN_H = 190, 58
-    BTN_GAP      = 10
-    FIRST_BTN_Y  = 175
+    BG            = (13, 16, 26)
+    C_TEXT        = (224, 232, 245)
+    C_DIM         = (132, 145, 168)
+    C_BORDER      = (66, 80, 105)
+    C_CARD        = (28, 37, 55)
+    C_CARD_HOV    = (40, 53, 78)
+    C_CARD_SEL_A  = (95, 42, 48)
+    C_CARD_SEL_B  = (40, 62, 100)
+    C_ACCENT_A    = (235, 96, 96)
+    C_ACCENT_B    = (102, 154, 240)
+    C_NEXT        = (46, 138, 84)
+    C_NEXT_H      = (64, 166, 101)
+    C_BACK        = (63, 74, 100)
+    C_BACK_H      = (82, 94, 123)
 
-    # ── Colours ────────────────────────────────────────────────────────────────
-    BG          = (15, 18, 28)
-    C_TEXT      = (220, 220, 220)
-    C_DIM       = (130, 140, 160)
-    C_DIV       = (45, 55, 75)
-    C_BTN       = (35, 44, 60)
-    C_BTN_HOV   = (50, 62, 85)
-    C_SEL_A     = (130, 35, 35)
-    C_SEL_B     = (28, 65, 140)
-    C_BORDER    = (60, 70, 90)
-    C_BORDER_SA = (220, 80, 80)
-    C_BORDER_SB = (80, 130, 220)
-    C_START     = (45, 140, 65)
-    C_START_H   = (60, 170, 85)
-    C_HEAD_A    = (220, 80, 80)
-    C_HEAD_B    = (80, 130, 220)
+    h_gap = 28
+    v_gap = max(20, int(SCREEN_HEIGHT * 0.028))
+    card_w = min(600, max(460, (SCREEN_WIDTH - 220 - h_gap) // 2))
+    card_h = min(190, max(152, int(SCREEN_HEIGHT * 0.24)))
+    grid_x = (SCREEN_WIDTH - (card_w * 2 + h_gap)) // 2
+    grid_y = 170
+    card_image_size = min(124, max(96, card_h - 54))
 
+    images = _load_agent_images(card_image_size=card_image_size)
+    hero_bg = _load_menu_background((SCREEN_WIDTH, SCREEN_HEIGHT))
     selected = {AGENT_A: 'minimax', AGENT_B: 'montecarlo'}
 
+    page = 0
+    pending_page = 0
+    fade_alpha = 0
+    fade_phase = None  # None | 'out' | 'in'
+    anim_t = 0.0
+
     while True:
+        dt = clock.tick(FPS)
+        anim_t += dt * 0.001
         mx, my = pygame.mouse.get_pos()
-        screen.fill(BG)
 
-        # ── Title ──────────────────────────────────────────────────────────────
-        t1 = f_title.render("World Balance Architects", True, C_TEXT)
-        screen.blit(t1, (SCREEN_WIDTH // 2 - t1.get_width() // 2, 38))
-        t2 = f_sub.render("Choose which agents will compete", True, C_DIM)
-        screen.blit(t2, (SCREEN_WIDTH // 2 - t2.get_width() // 2, 84))
+        # Hero background + readability veil
+        if hero_bg is not None:
+            screen.blit(hero_bg, (0, 0))
+            dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            dim.fill((10, 12, 20, 120))
+            screen.blit(dim, (0, 0))
+        else:
+            screen.fill(BG)
 
-        # ── Divider + column headers ────────────────────────────────────────────
-        pygame.draw.line(screen, C_DIV,
-                         (SCREEN_WIDTH // 2, 115), (SCREEN_WIDTH // 2, 455), 1)
+        role = AGENT_A if page == 0 else AGENT_B
+        role_label = 'Agent A' if page == 0 else 'Agent B'
+        accent = C_ACCENT_A if page == 0 else C_ACCENT_B
+        card_sel = C_CARD_SEL_A if page == 0 else C_CARD_SEL_B
 
-        ha = f_head.render("Agent A", True, C_HEAD_A)
-        screen.blit(ha, (COL_A_CX - ha.get_width() // 2, 120))
-        hb = f_head.render("Agent B", True, C_HEAD_B)
-        screen.blit(hb, (COL_B_CX - hb.get_width() // 2, 120))
+        # Header
+        t1 = f_title.render('World Balance Architects', False, C_TEXT)
+        screen.blit(t1, (SCREEN_WIDTH // 2 - t1.get_width() // 2, 28))
+        subtitle = f'Step {page + 1}/2  -  Choose {role_label}'
+        t2 = f_sub.render(subtitle, False, C_DIM)
+        screen.blit(t2, (SCREEN_WIDTH // 2 - t2.get_width() // 2, 75))
 
-        # Thin underline beneath headers
-        for cx, color in ((COL_A_CX, C_HEAD_A), (COL_B_CX, C_HEAD_B)):
-            pygame.draw.line(screen, color,
-                             (cx - 55, 145), (cx + 55, 145), 2)
+        # Progress pill
+        pill = pygame.Rect(SCREEN_WIDTH // 2 - 90, 104, 180, 28)
+        pygame.draw.rect(screen, (24, 31, 45), pill, border_radius=14)
+        pygame.draw.rect(screen, C_BORDER, pill, 1, border_radius=14)
+        prog_w = int((pill.width - 6) * ((page + 1) / 2.0))
+        prog = pygame.Rect(pill.x + 3, pill.y + 3, prog_w, pill.height - 6)
+        pygame.draw.rect(screen, accent, prog, border_radius=12)
+        step_txt = f_step.render(role_label, False, C_TEXT)
+        screen.blit(step_txt, (pill.centerx - step_txt.get_width() // 2,
+                               pill.centery - step_txt.get_height() // 2))
 
-        # ── Agent buttons (3 per column) ────────────────────────────────────────
-        btn_map = {AGENT_A: [], AGENT_B: []}
+        # Cards (2 x 2)
+        card_buttons = []
+        for idx, (atype, label, desc) in enumerate(_AGENT_OPTIONS):
+            col = idx % 2
+            row = idx // 2
+            x = grid_x + col * (card_w + h_gap)
+            y = grid_y + row * (card_h + v_gap)
 
-        for agent_id, col_cx, c_sel, c_bord_sel in (
-            (AGENT_A, COL_A_CX, C_SEL_A, C_BORDER_SA),
-            (AGENT_B, COL_B_CX, C_SEL_B, C_BORDER_SB),
-        ):
-            for row, (atype, label, desc) in enumerate(_AGENT_OPTIONS):
-                bx = col_cx - BTN_W // 2
-                by = FIRST_BTN_Y + row * (BTN_H + BTN_GAP)
-                rect = pygame.Rect(bx, by, BTN_W, BTN_H)
-                btn_map[agent_id].append((rect, atype))
+            bob = int(3.0 * pygame.math.Vector2(1, 0).rotate(anim_t * 100 + idx * 33).x)
+            rect = pygame.Rect(x, y + bob, card_w, card_h)
+            is_sel = selected[role] == atype
+            is_hov = rect.collidepoint(mx, my)
 
-                is_sel = selected[agent_id] == atype
-                is_hov = rect.collidepoint(mx, my) and not is_sel
+            fill = card_sel if is_sel else (C_CARD_HOV if is_hov else C_CARD)
+            border = accent if is_sel else C_BORDER
+            border_w = 2 if is_sel else 1
+            pygame.draw.rect(screen, fill, rect, border_radius=14)
+            pygame.draw.rect(screen, border, rect, border_w, border_radius=14)
 
-                # Background
-                fill   = c_sel if is_sel else (C_BTN_HOV if is_hov else C_BTN)
-                border = c_bord_sel if is_sel else C_BORDER
-                bw     = 2 if is_sel else 1
-                pygame.draw.rect(screen, fill, rect, border_radius=8)
-                pygame.draw.rect(screen, border, rect, bw, border_radius=8)
+            img = images.get(atype)
+            img_y = rect.y + (card_h - card_image_size) // 2
+            img_box = pygame.Rect(rect.x + 16, img_y, card_image_size, card_image_size)
+            pygame.draw.rect(screen, (20, 26, 38), img_box, border_radius=10)
+            if img is not None:
+                screen.blit(img, (img_box.x, img_box.y))
+            else:
+                tag = f_small.render(label[:2].upper(), False, C_TEXT)
+                screen.blit(tag, (img_box.centerx - tag.get_width() // 2,
+                                  img_box.centery - tag.get_height() // 2))
 
-                # Label + description
-                lt = f_btn.render(label, True, C_TEXT)
-                screen.blit(lt, (rect.centerx - lt.get_width() // 2,
-                                 rect.top + 14))
-                dt = f_desc.render(desc, True,
-                                   C_TEXT if is_sel else C_DIM)
-                screen.blit(dt, (rect.centerx - dt.get_width() // 2,
-                                 rect.top + 38))
+            lt = f_btn.render(label, False, C_TEXT)
+            dtxt = f_desc.render(desc, False, C_TEXT if is_sel else C_DIM)
+            text_x = img_box.right + 20
+            title_y = rect.y + card_h // 2 - lt.get_height() - 4
+            desc_y = rect.y + card_h // 2 + 6
+            screen.blit(lt, (text_x, title_y))
+            screen.blit(dtxt, (text_x, desc_y))
 
-        # ── Start button ────────────────────────────────────────────────────────
-        start_rect = pygame.Rect(SCREEN_WIDTH // 2 - 130, 465, 260, 52)
-        s_hov      = start_rect.collidepoint(mx, my)
-        pygame.draw.rect(screen, C_START_H if s_hov else C_START,
-                         start_rect, border_radius=10)
-        pygame.draw.rect(screen, C_BORDER, start_rect, 1, border_radius=10)
-        st = f_start.render("Start Game", True, (255, 255, 255))
-        screen.blit(st, (start_rect.centerx - st.get_width() // 2,
-                         start_rect.centery - st.get_height() // 2))
+            card_buttons.append((rect, atype))
 
-        # ── Selection summary (below headers, above buttons) ────────────────────
-        # (drawn implicitly via button highlight — no extra text needed)
+        # Selection summary row
+        grid_bottom = grid_y + (card_h * 2) + v_gap
+        summary_y = grid_bottom + 14
+        footer_y = min(SCREEN_HEIGHT - 66, summary_y + 40)
+
+        summary = f"A: {selected[AGENT_A]}    vs    B: {selected[AGENT_B]}"
+        sm = f_sub.render(summary, False, C_DIM)
+        screen.blit(sm, (SCREEN_WIDTH // 2 - sm.get_width() // 2, summary_y))
+
+        # Footer buttons
+        back_rect = pygame.Rect(SCREEN_WIDTH // 2 - 210, footer_y, 170, 50)
+        if page == 0:
+            # Step 1 has a single CTA, so keep it centered.
+            next_rect = pygame.Rect(SCREEN_WIDTH // 2 - 85, footer_y, 170, 50)
+        else:
+            # Step 2 shows Back + Start Match as a balanced pair.
+            next_rect = pygame.Rect(SCREEN_WIDTH // 2 + 40, footer_y, 170, 50)
+
+        if page == 1:
+            back_hov = back_rect.collidepoint(mx, my)
+            pygame.draw.rect(screen, C_BACK_H if back_hov else C_BACK, back_rect, border_radius=10)
+            pygame.draw.rect(screen, C_BORDER, back_rect, 1, border_radius=10)
+            bt = f_btn.render('Back', False, C_TEXT)
+            screen.blit(bt, (back_rect.centerx - bt.get_width() // 2,
+                             back_rect.centery - bt.get_height() // 2))
+
+        next_hov = next_rect.collidepoint(mx, my)
+        pygame.draw.rect(screen, C_NEXT_H if next_hov else C_NEXT, next_rect, border_radius=10)
+        pygame.draw.rect(screen, C_BORDER, next_rect, 1, border_radius=10)
+        next_label = 'Next' if page == 0 else 'Start Match'
+        nt = f_btn.render(next_label, False, (255, 255, 255))
+        screen.blit(nt, (next_rect.centerx - nt.get_width() // 2,
+                         next_rect.centery - nt.get_height() // 2))
+
+        # Page transition fade
+        if fade_phase == 'out':
+            fade_alpha = min(255, fade_alpha + 26)
+            if fade_alpha >= 255:
+                page = pending_page
+                fade_phase = 'in'
+        elif fade_phase == 'in':
+            fade_alpha = max(0, fade_alpha - 26)
+            if fade_alpha <= 0:
+                fade_phase = None
+
+        if fade_alpha > 0:
+            fade = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            fade.fill((8, 10, 16, fade_alpha))
+            screen.blit(fade, (0, 0))
 
         pygame.display.flip()
-        clock.tick(FPS)
 
-        # ── Events ─────────────────────────────────────────────────────────────
+        # Events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -167,15 +320,22 @@ def run_selection_screen(screen, clock):
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 pygame.quit()
                 sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # Check agent buttons
-                for agent_id, buttons in btn_map.items():
-                    for rect, atype in buttons:
-                        if rect.collidepoint(event.pos):
-                            selected[agent_id] = atype
-                # Check start
-                if start_rect.collidepoint(event.pos):
-                    return selected[AGENT_A], selected[AGENT_B]
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and fade_phase is None:
+                for rect, atype in card_buttons:
+                    if rect.collidepoint(event.pos):
+                        selected[role] = atype
+
+                if page == 1 and back_rect.collidepoint(event.pos):
+                    pending_page = 0
+                    fade_phase = 'out'
+
+                if next_rect.collidepoint(event.pos):
+                    if page == 0:
+                        pending_page = 1
+                        fade_phase = 'out'
+                    else:
+                        return selected[AGENT_A], selected[AGENT_B]
 
 
 # =============================================================================
@@ -193,13 +353,13 @@ _PARAMS_CONFIG = [
 ]
 
 _MINIMAX_PARAMS = [
-    ('mm_depth',    'Minimax Depth',         2.0,  1.0,   6.0,  1.0, 'Higher = stronger (slower)'),
+    ('mm_depth',    'Minimax Depth',         1.0,  1.0,   6.0,  1.0, 'Higher = stronger (slower)'),
     ('mm_branches', 'Max Branches',         12.0,  4.0,  28.0,  2.0, 'Moves sampled per node'),
 ]
 
 _MC_PARAMS = [
-    ('mc_rollouts', 'MC Rollouts',          15.0,  5.0,  60.0,  5.0, 'More = stronger (slower)'),
-    ('mc_depth',    'MC Rollout Depth',      8.0,  4.0,  24.0,  2.0, 'Steps per rollout'),
+    ('mc_rollouts', 'MC Rollouts',          10.0,  5.0,  60.0,  5.0, 'More = stronger (slower)'),
+    ('mc_depth',    'MC Rollout Depth',      5.0,  4.0,  24.0,  2.0, 'Steps per rollout'),
 ]
 
 
@@ -210,14 +370,14 @@ def run_params_screen(screen, clock, a_type: str = '', b_type: str = ''):
     'Use Defaults' resets everything; 'Start Game' confirms.
     Returns a dict {key: value} used by World() and build_agent().
     """
-    f_title  = pygame.font.SysFont('Segoe UI', 34, bold=True)
-    f_sub    = pygame.font.SysFont('Segoe UI', 17)
-    f_label  = pygame.font.SysFont('Segoe UI', 15, bold=True)
-    f_sec    = pygame.font.SysFont('Segoe UI', 13, bold=True)
-    f_val    = pygame.font.SysFont('Segoe UI', 15, bold=True)
-    f_hint   = pygame.font.SysFont('Segoe UI', 12)
-    f_btn    = pygame.font.SysFont('Segoe UI', 17, bold=True)
-    f_start  = pygame.font.SysFont('Segoe UI', 19, bold=True)
+    f_title  = _ui_font(34, bold=True)
+    f_sub    = _ui_font(17)
+    f_label  = _ui_font(15, bold=True)
+    f_sec    = _ui_font(13, bold=True)
+    f_val    = _ui_font(15, bold=True)
+    f_hint   = _ui_font(12)
+    f_btn    = _ui_font(17, bold=True)
+    f_start  = _ui_font(19, bold=True)
 
     BG        = (15,  18,  28)
     C_TEXT    = (220, 220, 220)
@@ -253,6 +413,7 @@ def run_params_screen(screen, clock, a_type: str = '', b_type: str = ''):
 
     # Working values initialised to defaults
     values = {key: default for key, _l, default, _mn, _mx, _s, _h in all_configs}
+    hero_bg = _load_menu_background((SCREEN_WIDTH, SCREEN_HEIGHT))
 
     # ── Dynamic layout ─────────────────────────────────────────────────────────
     ROW_Y0  = 118
@@ -264,12 +425,17 @@ def run_params_screen(screen, clock, a_type: str = '', b_type: str = ''):
     ROW_H   = max(40, min(62, _avail // n_total))
     BTN_SZ  = min(30, ROW_H - 10)
 
+    # Center the parameter table block horizontally.
+    TABLE_W = 800
+    TABLE_X = (SCREEN_WIDTH - TABLE_W) // 2
+    TABLE_R = TABLE_X + TABLE_W
+
     # Horizontal positions (fixed regardless of row count)
-    LABEL_X = 72
-    MINUS_X = 490
+    LABEL_X = TABLE_X + 22
+    MINUS_X = TABLE_X + 440
     GAP     = 5
     VAL_W   = 72
-    HINT_X  = 652
+    HINT_X  = TABLE_X + 602
 
     def _row_y(i: int) -> int:
         """Top-left y of row i, accounting for the section separator."""
@@ -285,42 +451,48 @@ def run_params_screen(screen, clock, a_type: str = '', b_type: str = ''):
 
     while True:
         mx, my = pygame.mouse.get_pos()
-        screen.fill(BG)
+        if hero_bg is not None:
+            screen.blit(hero_bg, (0, 0))
+            dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            dim.fill((10, 12, 20, 145))
+            screen.blit(dim, (0, 0))
+        else:
+            screen.fill(BG)
 
         # Title
-        t1 = f_title.render("Configure Starting Parameters", True, C_TEXT)
+        t1 = f_title.render("Configure Starting Parameters", False, C_TEXT)
         screen.blit(t1, (SCREEN_WIDTH // 2 - t1.get_width() // 2, 30))
         t2 = f_sub.render(
-            "Adjust the planet's initial state — or keep the defaults", True, C_DIM)
+            "Adjust the planet's initial state — or keep the defaults", False, C_DIM)
         screen.blit(t2, (SCREEN_WIDTH // 2 - t2.get_width() // 2, 75))
-        pygame.draw.line(screen, C_DIV, (50, 108), (850, 108), 1)
+        pygame.draw.line(screen, C_DIV, (TABLE_X, 108), (TABLE_R, 108), 1)
 
         # Buttons (anchored below the last row)
         btn_y      = _btn_area_top()
         def_rect   = pygame.Rect(SCREEN_WIDTH // 2 - 250, btn_y, 190, BTN_H)
         start_rect = pygame.Rect(SCREEN_WIDTH // 2 +  60, btn_y, 190, BTN_H)
 
-        pygame.draw.line(screen, C_DIV, (50, btn_y - 8), (850, btn_y - 8), 1)
+        pygame.draw.line(screen, C_DIV, (TABLE_X, btn_y - 8), (TABLE_R, btn_y - 8), 1)
 
         d_hov = def_rect.collidepoint(mx, my)
         pygame.draw.rect(screen, C_DEF_H if d_hov else C_DEF, def_rect, border_radius=10)
         pygame.draw.rect(screen, C_BORDER, def_rect, 1, border_radius=10)
-        dt = f_btn.render("Use Defaults", True, C_TEXT)
+        dt = f_btn.render("Use Defaults", False, C_TEXT)
         screen.blit(dt, (def_rect.centerx  - dt.get_width()  // 2,
                          def_rect.centery  - dt.get_height() // 2))
 
         s_hov = start_rect.collidepoint(mx, my)
         pygame.draw.rect(screen, C_START_H if s_hov else C_START, start_rect, border_radius=10)
         pygame.draw.rect(screen, C_BORDER, start_rect, 1, border_radius=10)
-        st = f_start.render("Start Game", True, (255, 255, 255))
+        st = f_start.render("Start Game", False, (255, 255, 255))
         screen.blit(st, (start_rect.centerx - st.get_width()  // 2,
                          start_rect.centery - st.get_height() // 2))
 
         # Section separator between planet and algo rows
         if has_algo:
             sep_y  = _row_y(n_planet)
-            pygame.draw.line(screen, C_DIV, (50, sep_y - 4), (850, sep_y - 4), 1)
-            sec_lbl = f_sec.render("Algorithm Settings", True, C_SEC)
+            pygame.draw.line(screen, C_DIV, (TABLE_X, sep_y - 4), (TABLE_R, sep_y - 4), 1)
+            sec_lbl = f_sec.render("Algorithm Settings", False, C_SEC)
             screen.blit(sec_lbl, (SCREEN_WIDTH // 2 - sec_lbl.get_width() // 2,
                                   sep_y - SEP_H + 4))
 
@@ -338,10 +510,10 @@ def run_params_screen(screen, clock, a_type: str = '', b_type: str = ''):
             else:
                 bg_color = C_ROW if i % 2 == 0 else C_ROW_ALT
             pygame.draw.rect(screen, bg_color,
-                             pygame.Rect(50, row_y, 800, ROW_H - 4), border_radius=6)
+                             pygame.Rect(TABLE_X, row_y, TABLE_W, ROW_H - 4), border_radius=6)
 
             # Label
-            lt = f_label.render(label, True, C_TEXT)
+            lt = f_label.render(label, False, C_TEXT)
             screen.blit(lt, (LABEL_X,
                              row_y + (ROW_H - 4) // 2 - lt.get_height() // 2))
 
@@ -352,7 +524,7 @@ def run_params_screen(screen, clock, a_type: str = '', b_type: str = ''):
             m_hov  = m_rect.collidepoint(mx, my)
             pygame.draw.rect(screen, C_MINUS_H if m_hov else C_MINUS, m_rect, border_radius=5)
             pygame.draw.rect(screen, C_BORDER, m_rect, 1, border_radius=5)
-            mt = f_val.render("−", True, C_TEXT)
+            mt = f_val.render("−", False, C_TEXT)
             screen.blit(mt, (m_rect.centerx - mt.get_width() // 2,
                              m_rect.centery - mt.get_height() // 2))
             minus_btns.append((m_rect, key, vmin, step))
@@ -363,7 +535,7 @@ def run_params_screen(screen, clock, a_type: str = '', b_type: str = ''):
             pygame.draw.rect(screen, C_BORDER, v_rect, 1, border_radius=4)
             v   = values[key]
             txt = str(int(v)) if v == int(v) else f"{v:.1f}"
-            vt  = f_val.render(txt, True, C_TEXT)
+            vt  = f_val.render(txt, False, C_TEXT)
             screen.blit(vt, (v_rect.centerx - vt.get_width() // 2,
                              v_rect.centery - vt.get_height() // 2))
 
@@ -372,13 +544,13 @@ def run_params_screen(screen, clock, a_type: str = '', b_type: str = ''):
             p_hov  = p_rect.collidepoint(mx, my)
             pygame.draw.rect(screen, C_PLUS_H if p_hov else C_PLUS, p_rect, border_radius=5)
             pygame.draw.rect(screen, C_BORDER, p_rect, 1, border_radius=5)
-            pt = f_val.render("+", True, C_TEXT)
+            pt = f_val.render("+", False, C_TEXT)
             screen.blit(pt, (p_rect.centerx - pt.get_width() // 2,
                              p_rect.centery - pt.get_height() // 2))
             plus_btns.append((p_rect, key, vmax, step))
 
             # Hint
-            ht = f_hint.render(hint, True, C_DIM)
+            ht = f_hint.render(hint, False, C_DIM)
             screen.blit(ht, (HINT_X,
                              row_y + (ROW_H - 4) // 2 - ht.get_height() // 2))
 
@@ -492,7 +664,64 @@ def build_agent(agent_type: str, agent_id: str, agent_params: dict = None):
                          f"Choose from: minimax, montecarlo, qlearning")
 
 
-def run_agent_turn(world: World, agents: dict) -> tuple:
+_ACTION_FX_KEYS = {
+    'PlantForest': 'plant_forest',
+    'BuildCanal': 'build_canal',
+    'BuildReservoir': 'plant_reservoir',
+    'PlantFarm': 'plant_crop',
+    'HarvestCrop': 'harvest_crop',
+    'ClearForest': 'clear_forest',
+    'BuildSolarPlant': 'build_solar',
+}
+
+
+def _get_action_fx_key(action) -> str | None:
+    return _ACTION_FX_KEYS.get(action.__class__.__name__)
+
+
+class TurnExecutor:
+    """Runs a game turn in a background thread and reports results."""
+    def __init__(self):
+        self.thread: threading.Thread | None = None
+        self.result: tuple | None = None
+        self.error: Exception | None = None
+        self.is_running = False
+
+    def start(self, world: World, agents: dict, renderer: Renderer | None = None):
+        """Start a turn execution in background thread."""
+        if self.is_running:
+            return  # Already running
+        self.result = None
+        self.error = None
+        self.is_running = True
+        self.thread = threading.Thread(
+            target=self._execute_turn,
+            args=(world, agents, renderer),
+            daemon=True
+        )
+        self.thread.start()
+
+    def _execute_turn(self, world: World, agents: dict, renderer: Renderer | None):
+        """Execute turn and store result."""
+        try:
+            self.result = run_agent_turn(world, agents, renderer)
+        except Exception as e:
+            self.error = e
+        finally:
+            self.is_running = False
+
+    def is_done(self) -> bool:
+        """Check if turn execution finished."""
+        return not self.is_running
+
+    def get_result(self) -> tuple:
+        """Get the turn result. Only call after is_done() returns True."""
+        if self.error:
+            raise self.error
+        return self.result or (False, None)
+
+
+def run_agent_turn(world: World, agents: dict, renderer: Renderer | None = None) -> tuple:
     """
     Let the current active agent choose and apply its action,
     run world simulation, and switch turns.
@@ -517,29 +746,52 @@ def run_agent_turn(world: World, agents: dict) -> tuple:
     pre_stability = world.stability if is_learner else None
     action_idx    = None
 
+    if renderer is not None:
+        renderer.set_thinking(current)
+        renderer.set_turn_banner(current, agent.name, "Thinking...")
+
     # Agent chooses its best action — guarded so a crash doesn't kill pygame
     try:
         action, r, c = agent.choose_action(world)
     except Exception as exc:
         print(f"  [WARN] Agent {current} choose_action raised: {exc} — skipping turn")
         action, r, c = None, -1, -1
+    finally:
+        if renderer is not None:
+            renderer.set_thinking(None)
 
     if action is None:
         # No valid moves (or error above) — agent passes this turn
         world.log_action(f"Agent {current} ({agent.name}): no valid moves")
+        if renderer is not None:
+            renderer.set_turn_banner(current, agent.name, "No valid moves")
     else:
         if is_qlearner:
             action_idx = ACTION_INDEX.get(action.name, 0)
         elif is_dqn:
             action_idx = DQN_ACTION_INDEX.get(action.name, 0)
         try:
+            action_label = action.name.replace("_", " ").title()
+            if renderer is not None:
+                renderer.set_turn_banner(current, agent.name, action_label)
+            if renderer is not None and r >= 0 and c >= 0:
+                renderer.move_agent_to(current, c, r)
+                # Let at least a few frames show movement before the world updates.
+                time.sleep(0.18)
+
             from engine.actions import apply_action
             log = apply_action(world, current, action, r, c)
             print(f"  {log}")
+            if renderer is not None:
+                fx_key = _get_action_fx_key(action)
+                if fx_key is not None and r >= 0 and c >= 0:
+                    renderer.trigger_action_fx(fx_key, c, r, current)
         except Exception as exc:
             print(f"  [WARN] Agent {current} apply_action raised: {exc} — skipping turn")
             world.log_action(f"Agent {current} ({agent.name}): action failed")
             action_idx = None   # action failed — don't update Q-table
+            if renderer is not None:
+                renderer.set_turn_banner(current, agent.name, "Action failed")
 
     # Simulate the world after this agent's action
     try:
@@ -602,8 +854,8 @@ def main():
         agent_a = build_agent(a_type, AGENT_A, custom_params)
         agent_b = build_agent(b_type, AGENT_B, custom_params)
         agents  = {AGENT_A: agent_a, AGENT_B: agent_b}
-        print(f"  Agent A → {agent_a.name}")
-        print(f"  Agent B → {agent_b.name}\n")
+        print(f"  Agent A -> {agent_a.name}")
+        print(f"  Agent B -> {agent_b.name}\n")
 
         pygame.display.set_caption(
             f"{TITLE}  |  A: {agent_a.name}  vs  B: {agent_b.name}"
@@ -612,15 +864,20 @@ def main():
         # ── Game state ─────────────────────────────────────────────────────────
         world         = World(custom_params=custom_params)
         renderer      = Renderer(screen)
+        renderer.set_agent_visuals({AGENT_A: a_type, AGENT_B: b_type})
         game_over     = False
         end_reason    = None
         auto_play     = True
+        paused        = False
         auto_delay_ms = AUTO_PLAY_DELAY_MS
+        pause_toggle_cooldown_ms = 140
+        last_pause_toggle_ms = -pause_toggle_cooldown_ms
         last_auto_ms  = 0
+        turn_executor = TurnExecutor()  # Background thread for turn execution
 
         world.print_grid()
         print("Game started — agents are playing automatically.")
-        print("Controls: SPACE=step  A=pause/resume  R=new selection  +/-=speed  ESC=quit\n")
+        print("Controls: SPACE=pause/resume  N=step(while paused)  R=new selection  +/-=speed  ESC=quit\n")
 
         # ── Game loop ──────────────────────────────────────────────────────────
         running = True
@@ -642,14 +899,9 @@ def main():
                         pygame.quit()
                         sys.exit()
 
-                    # Toggle auto-play pause/resume
-                    elif event.key == pygame.K_a:
-                        auto_play = not auto_play
-                        print(f"Auto-play: {'RESUMED' if auto_play else 'PAUSED'}")
-
-                    # Manual step
-                    elif event.key == pygame.K_SPACE and not game_over:
-                        game_over, end_reason = run_agent_turn(world, agents)
+                    # Manual one-turn step while paused
+                    elif event.key == pygame.K_n and paused and not game_over and not turn_executor.is_running:
+                        turn_executor.start(world, agents, renderer)
 
                     # R — save, then return to agent-selection screen
                     elif event.key == pygame.K_r:
@@ -667,16 +919,32 @@ def main():
                                             auto_delay_ms + AUTO_PLAY_SPEED_STEP)
                         print(f"Auto-play delay: {auto_delay_ms} ms")
 
+                elif event.type == pygame.KEYUP and event.key in (pygame.K_SPACE, pygame.K_a):
+                    # Toggle on key release to avoid double-toggle from key repeat.
+                    if now_ms - last_pause_toggle_ms >= pause_toggle_cooldown_ms:
+                        paused = not paused
+                        last_pause_toggle_ms = now_ms
+                        print(f"Playback: {'PAUSED' if paused else 'RESUMED'}")
+
             # ── Auto-play tick ────────────────────────────────────────────────
-            if auto_play and not game_over:
+            if auto_play and (not paused) and not game_over:
                 if now_ms - last_auto_ms >= auto_delay_ms:
-                    game_over, end_reason = run_agent_turn(world, agents)
+                    # Start a turn in background thread
+                    turn_executor.start(world, agents, renderer)
                     last_auto_ms = now_ms
-                    if game_over:
-                        auto_play = False
+
+            # Check if background turn completed
+            if turn_executor.is_done() and turn_executor.result is not None:
+                game_over, end_reason = turn_executor.get_result()
+                turn_executor.result = None  # Clear result
+                if game_over:
+                    auto_play = False
 
             # ── Draw ──────────────────────────────────────────────────────────
-            renderer.draw(world)
+            if game_over:
+                renderer.draw_game_over(world, world.get_winner())
+            else:
+                renderer.draw(world)
             pygame.display.flip()
             clock.tick(FPS)
 

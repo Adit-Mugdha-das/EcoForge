@@ -11,7 +11,7 @@ from config import *
 
 class Cell:
     """
-    Represents a single tile on the 10x10 grid.
+    Represents a single tile on the 25x18 grid.
     Holds terrain type, ownership, and all per-cell resource values.
     """
 
@@ -49,7 +49,7 @@ class Cell:
 
 class World:
     """
-    The full game state: 10x10 grid + global planet meters + turn tracking.
+    The full game state: 25x18 grid + global planet meters + turn tracking.
     All simulation and action results flow through this object.
     """
 
@@ -116,7 +116,7 @@ class World:
         """
         Place initial river tiles and mark agent spawn positions.
 
-        Layout (10x10):
+        Layout (25x18):
             . . . . . . . . . .
             . A . . . . . . . .
             . . . . . . . . . .
