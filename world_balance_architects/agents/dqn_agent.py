@@ -211,16 +211,17 @@ class DQNAgent(BaseAgent):
 
         # Eco-hoarding filter — runs before epsilon check so it applies to
         # BOTH random exploration and exploitation.
-        # When eco > 40, restrict the move pool to actions costing >= 4.
-        # Actions that cost < 4 (Adjust=0, Harvest=1, ClearForest=2,
-        # Canal/Forest=3) earn less eco than the +2/turn passive income,
-        # so eco grows whenever they are chosen. Forcing a >= 4 cost action
-        # drains eco back down.
+        # When eco > 40, restrict the move pool to actions costing >= 3.
+        # Blocks only zero/trivial actions (Adjust=0, Harvest=1, ClearForest=2)
+        # while keeping Canal (3) and Farm (3) available — both are essential
+        # for water infrastructure and food production.
+        # Previously used >= 4 which accidentally blocked Canal and Farm,
+        # causing the model to loop Forest → Solar indefinitely.
         eco = world.eco_points[self.agent_id]
         if eco > 40:
-            expensive_moves = [(a, r, c) for a, r, c in moves if a.cost >= 4]
+            expensive_moves = [(a, r, c) for a, r, c in moves if a.cost >= 3]
             if expensive_moves:
-                moves = expensive_moves   # restrict pool — cheap actions excluded
+                moves = expensive_moves   # restrict pool — trivial actions excluded
 
         # Exploration
         if random.random() < self.epsilon:

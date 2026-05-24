@@ -12,10 +12,12 @@
 \usepackage{fancyhdr}
 \usepackage{setspace}
 \usepackage{listings}
-
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\usepackage{booktabs}
+\usepackage{float}
 \pagestyle{fancy}
 \fancyhf{}
-\lhead{World Balance Architects}
+\lhead{EcoForge}
 \rhead{Project Report}
 \rfoot{Page \thepage}
 
@@ -37,8 +39,7 @@
   basicstyle=\ttfamily\small,
   breaklines=true,
   frame=single,
-  columns=fullflexible,
-  keepspaces=true
+  columns=fullflexible
 }
 
 \begin{document}
@@ -47,28 +48,76 @@
 % Title Page
 % ================================================================
 \begin{titlepage}
-    \centering
-    \vspace*{2cm}
+\centering
 
-    {\Huge\bfseries World Balance Architects\par}
-    \vspace{0.6cm}
-    {\Large AI Ecological Optimization Simulation\par}
-    \vspace{1.2cm}
+\vspace*{0.5cm}
 
-    {\Large Project Report\par}
-    \vspace{2cm}
+\includegraphics[width=3.0cm]{logo.png}
 
-    \begin{flushleft}
-    \large
-    \textbf{Project Type:} Artificial Intelligence Laboratory Project\\[0.4cm]
-    \textbf{Domain:} Multi-Agent Ecological Strategy Simulation\\[0.4cm]
-    \textbf{Platform:} Python and Pygame\\[0.4cm]
-    \textbf{Core Focus:} Environmental balancing, simulation, and AI agent comparison
-    \end{flushleft}
+\vspace{0.35cm}
 
-    \vfill
+{\small \textbf{Khulna University of Engineering \& Technology}}\\
+{\small Khulna-9203, Bangladesh}\\
+{\small \textbf{Department of Computer Science and Engineering}}
 
-    {\large \today\par}
+\vspace{0.35cm}
+\rule{\textwidth}{1.2pt}
+
+\vspace{0.45cm}
+
+{\small CSE 3210 -- Artificial Intelligence Laboratory}
+
+\vspace{0.55cm}
+
+{\Large\bfseries EcoForge}\\[0.25cm]
+
+{\large AI Ecological Optimization Simulation}
+
+\vspace{0.45cm}
+\rule{\textwidth}{1.2pt}
+
+\vspace{1.2cm}
+
+\begin{minipage}[t]{0.45\textwidth}
+\raggedright
+\small
+\textbf{Submitted By:}\\[0.25cm]
+
+\textbf{Shormi Ghosh}\\
+Roll No.: 2107109\\
+Department of Computer Science and Engineering\\
+Khulna University of Engineering \& Technology\\[0.35cm]
+
+\textbf{Adit Mugdha Das}\\
+Roll No.: 2107118\\
+Department of Computer Science and Engineering\\
+Khulna University of Engineering \& Technology
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.45\textwidth}
+\raggedright
+\small
+\textbf{Submitted To:}\\[0.25cm]
+
+\textbf{Md Mehrab Hossain Opi}\\
+Lecturer\\
+Department of Computer Science and Engineering\\
+Khulna University of Engineering \& Technology\\[0.35cm]
+
+\textbf{Waliul Islam Sumon}\\
+Lecturer\\
+Department of Computer Science and Engineering\\
+Khulna University of Engineering \& Technology
+\end{minipage}
+
+\vfill
+
+\rule{\textwidth}{0.8pt}
+
+\vspace{0.25cm}
+
+{\small 28 April 2026}
+
 \end{titlepage}
 
 % ================================================================
@@ -82,11 +131,7 @@
 \vspace{0.8cm}
 
 \onehalfspacing
-World Balance Architects is an artificial intelligence project centered on a competitive environmental simulation in which two agents act on a shared planetary ecosystem. The system is designed as a turn-based strategy environment where agents must manage water, food, oxygen, and temperature while competing for higher performance over time. The project combines game design, ecological modeling, reinforcement learning, adversarial planning, and simulation-based decision making within a single experimental framework.
-
-The implemented project is organized into three major layers: a simulation engine that maintains the world state and ecological dynamics, an artificial intelligence layer that contains multiple decision-making agents, and a rendering layer that visualizes the evolving world through a Python Pygame interface. In this report, the comparison focuses on three selected agent architectures: Minimax, Monte Carlo, and Deep Q-Network (DQN). This makes the project suitable not only as a playable simulation but also as a laboratory platform for comparing different AI approaches under the same environmental constraints.
-
-This report analyzes the project from both a system and AI perspective. It explains the architecture of the simulation, the role of environment parameters and actions, the design of the competing agents, and the evaluation methods used to judge environmental and strategic performance. The overall aim is to show how the project integrates ecological balance with intelligent decision making in a structured and academically meaningful way.
+EcoForge is an artificial intelligence project centered on a competitive environmental simulation in which two agents act on a shared planetary ecosystem. The system is designed as a turn-based strategy environment where agents must manage water, food, oxygen, and temperature while competing for higher performance over time. The project combines game design, ecological modeling, reinforcement learning, adversarial planning, and simulation-based decision making within a single experimental framework.The implemented project is organized into three major layers: a simulation engine that maintains the world state and ecological dynamics, an artificial intelligence layer that contains multiple decision-making agents, and a rendering layer that visualizes the evolving world through a Python Pygame interface. In this report, the comparison focuses on three selected agent architectures: Minimax, Monte Carlo, and Deep Q-Network (DQN). This makes the project suitable not only as a playable simulation but also as a laboratory platform for comparing different AI approaches under the same environmental constraints.This report analyzes the project from both a system and AI perspective. It explains the architecture of the simulation, the role of environment parameters and actions, the design of the competing agents, and the evaluation methods used to judge environmental and strategic performance. The overall aim is to show how the project integrates ecological balance with intelligent decision making in a structured and academically meaningful way.
 \singlespacing
 
 % ================================================================
@@ -104,11 +149,7 @@ This report analyzes the project from both a system and AI perspective. It expla
 
 \subsection{Introduction}
 
-World Balance Architects addresses the problem of maintaining environmental balance in a shared ecosystem. In the project, water, food, oxygen, and temperature are tightly connected, so improving one part of the environment can disturb another part if decisions are not made carefully. This creates a meaningful problem for artificial intelligence because the system is not static; it changes after every action and forces agents to think about long-term consequences rather than short-term gain.
-
-The motivation behind the project is to build a simulation where environmental management can be studied in a simple but clear form. Instead of using a purely theoretical model, the project places the problem inside a playable grid-based world where agents interact with terrain, resources, and global ecological indicators. This makes the project more understandable, more visual, and more suitable for analysis in an AI laboratory setting.
-
-AI and simulation are combined in this project because simulation provides the evolving environment, while AI provides decision-making inside that environment. The simulation creates the ecological rules and feedback loops, and the AI agents attempt to operate efficiently within those rules. Together, they form a system that is useful for comparing planning methods, learning methods, and overall intelligent behavior.
+EcoForge addresses the problem of maintaining environmental balance in a shared ecosystem. In the project, water, food, oxygen, and temperature are tightly connected, so improving one part of the environment can disturb another part if decisions are not made carefully. This creates a meaningful problem for artificial intelligence because the system is not static; it changes after every action and forces agents to think about long-term consequences rather than short-term gain.The motivation behind the project is to build a simulation where environmental management can be studied in a simple but clear form. Instead of using a purely theoretical model, the project places the problem inside a playable grid-based world where agents interact with terrain, resources, and global ecological indicators. This makes the project more understandable, more visual, and more suitable for analysis in an AI laboratory setting.AI and simulation are combined in this project because simulation provides the evolving environment, while AI provides decision-making inside that environment. The simulation creates the ecological rules and feedback loops, and the AI agents attempt to operate efficiently within those rules. Together, they form a system that is useful for comparing planning methods, learning methods, and overall intelligent behavior.
 
 \subsection{Objectives}
 
@@ -126,16 +167,12 @@ The main objectives of this project are:
 
 \subsection{System Overview}
 
-At a high level, the system consists of four connected parts. The first part is the \textbf{environment}, which represents the world grid and the global ecological indicators. The second part is the \textbf{game engine}, which applies actions, updates the world state, and controls turn progression. The third part is the \textbf{agents}, which choose actions based on their own decision logic. The fourth part is the \textbf{deep learning model}, which is used by the DQN agent to improve its decision making from experience.
+At a high level, the system consists of four connected parts. The first part is the \textbf{environment}, which represents the world grid and the global ecological indicators. The second part is the \textbf{game engine}, which applies actions, updates the world state, and controls turn progression. The third part is the \textbf{agents}, which choose actions based on their own decision logic. The fourth part is the \textbf{deep learning model}, which is used by the DQN agent to improve its decision making from experience.In simple terms, the system works as follows: the environment provides the current state, an agent selects an action, the game engine applies that action, and the world is updated through simulation rules. This updated state is then used by the next agent or the next learning step. Because all components are connected, the project works as a complete AI simulation framework rather than a standalone game or a standalone algorithm demo.The overall structure is designed to keep the system modular. The environment stores state, the engine controls execution, the agents contain decision logic, and the learning component improves behavior over repeated interaction. This separation is useful for report writing because each part can be explained independently while still contributing to the same final system. The high-level relationship among these parts is illustrated in Figure 2.1.
 
-In simple terms, the system works as follows: the environment provides the current state, an agent selects an action, the game engine applies that action, and the world is updated through simulation rules. This updated state is then used by the next agent or the next learning step. Because all components are connected, the project works as a complete AI simulation framework rather than a standalone game or a standalone algorithm demo.
-
-The overall structure is designed to keep the system modular. The environment stores state, the engine controls execution, the agents contain decision logic, and the learning component improves behavior over repeated interaction. This separation is useful for report writing because each part can be explained independently while still contributing to the same final system. The high-level relationship among these parts is illustrated in Figure 2.1.
-
-\begin{figure}[h!]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{system_architecture.png}
-\caption{System Architecture of World Balance Architects}
+\includegraphics[width=1.00\textwidth]{system_architecture.png}
+\caption{System Architecture of EcoForge}
 \end{figure}
 
 % ================================================================
@@ -146,19 +183,15 @@ The overall structure is designed to keep the system modular. The environment st
 
 \subsection{Game Engine}
 
-The game engine is the core operational part of the project. It connects the environment, the agents, and the simulation logic into one continuous decision-making process. The environment is represented as a grid-based world in which each cell can hold a terrain type such as land, river, farm, forest, reservoir, or solar plant. Along with the grid, the engine also maintains global meters including water, food, oxygen, temperature, population, stability, score, and eco points. These variables together define the full state of the world at any moment.
+The game engine is the core operational part of the project. It connects the environment, the agents, and the simulation logic into one continuous decision-making process. The environment is represented as a grid-based world in which each cell can hold a terrain type such as land, river, farm, forest, reservoir, or solar plant. Along with the grid, the engine also maintains global meters including water, food, oxygen, temperature, population, stability, score, and eco points. These variables together define the full state of the world at any moment.The simulation loop follows a turn-based structure. First, the active agent observes the current state of the environment and selects an action. That action is applied to the grid through the game engine. After the action is executed, the simulation updates the world by spreading water, growing crops, maturing forests, recalculating global meters, updating stability, and awarding scores. Then control passes to the next agent, and the same process repeats until the game reaches the maximum turn limit or the environment collapses. This loop is important because it allows every action to influence the next state in a measurable and repeatable way.The sequence of operations inside the engine is summarized in Figure 3.1. This figure is useful because it shows how the system moves from state observation to action execution and then to world update. A visual example of the implemented interface is also provided in Figure 3.2, which shows how the grid and the planetary indicators appear during execution.
 
-The simulation loop follows a turn-based structure. First, the active agent observes the current state of the environment and selects an action. That action is applied to the grid through the game engine. After the action is executed, the simulation updates the world by spreading water, growing crops, maturing forests, recalculating global meters, updating stability, and awarding scores. Then control passes to the next agent, and the same process repeats until the game reaches the maximum turn limit or the environment collapses. This loop is important because it allows every action to influence the next state in a measurable and repeatable way.
-
-The sequence of operations inside the engine is summarized in Figure 3.1. This figure is useful because it shows how the system moves from state observation to action execution and then to world update. A visual example of the implemented interface is also provided in Figure 3.2, which shows how the grid and the planetary indicators appear during execution.
-
-\begin{figure}[h!]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.82\textwidth]{game_flow.png}
 \caption{Game Flow of the Simulation Loop}
 \end{figure}
 
-\begin{figure}[h!]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.82\textwidth]{game_world.png}
 \caption{Game World Interface}
@@ -166,11 +199,51 @@ The sequence of operations inside the engine is summarized in Figure 3.1. This f
 
 \subsection{Action Design and Parameters}
 
-The action system is designed to keep the project strategically rich while remaining manageable. In the full implementation, the environment supports multiple actions that allow agents to modify terrain, manage resources, and influence long-term ecological balance. For the report, the important idea is that each action has a clear cost, an immediate effect, and a broader environmental consequence.
+The action system defines how agents interact with the world grid and influence global ecological meters. EcoForge provides \textbf{eight distinct actions}, each with a specific eco-point cost, placement requirement, and environmental consequence. Table~3.1 summarizes the complete action space.
 
-The main actions used in the project include building canals, placing reservoirs, planting forests, clearing forests, planting farms, harvesting crops, building solar plants, and adjusting resource allocation. These actions are not equally valuable in every situation. Some actions increase water access, some increase food production, some improve oxygen, and some generate economic advantage at the cost of higher temperature. Because of this, action selection becomes a balance between short-term reward and long-term environmental stability.
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|c|p{8cm}|}
+\hline
+\textbf{Action} & \textbf{Eco Cost} & \textbf{Primary Effect} \\ \hline
+Build Canal          & 3  & Converts Land $\to$ River; expands water network to adjacent cells \\ \hline
+Build Reservoir      & 10 & Converts Land $\to$ Reservoir; permanent water source with per-step asset score bonus \\ \hline
+Plant Forest         & 4  & Converts Land $\to$ Forest; produces oxygen and cools the planet \\ \hline
+Clear Forest         & 2  & Removes own Forest $\to$ Land; eliminates oxygen production and cooling from that tile \\ \hline
+Plant Farm           & 3  & Converts Land $\to$ Farm; requires adjacent water; grows crops through 4 stages \\ \hline
+Harvest Crop         & 1  & Instantly adds $+15$ food from a mature stage-3 farm; awards $+2.0$ score bonus \\ \hline
+Build Solar Plant    & 8  & Generates $+1$ eco/step (passive income); heats planet $+0.4^\circ$/step \\ \hline
+Adjust Allocation    & 0  & Free action; sets agent priority to Farm, Forest, or Balanced \\ \hline
+\end{tabular}
+\caption{Complete action space with eco costs and primary effects}
+\end{table}
 
-Each action is associated with parameters such as eco-point cost, valid placement conditions, and environmental impact. For example, a farm requires water access, a reservoir must be placed near water sources, and a solar plant increases eco income but also adds thermal pressure to the planet. Rewards are therefore not tied only to direct score gain. Instead, rewards also emerge through better stability, improved resource levels, asset ownership, and stronger long-term system performance.
+\paragraph{Build Canal (Cost: 3 eco).} Converts a Land tile to a River tile, which must be placed adjacent to an existing River or Reservoir. It permanently sets the cell water value to 10.0, expanding the water network so that surrounding tiles become eligible for farm placement. This is typically the first infrastructure action required before any agriculture is viable.
+
+\paragraph{Build Reservoir (Cost: 10 eco).} Converts Land to a Reservoir following the same adjacency rule as a Canal. Its key strategic value beyond water supply is a continuous asset scoring bonus of $+0.3$ points per simulation step, making it a long-term investment.
+
+\paragraph{Plant Forest (Cost: 4 eco).} Creates a Forest tile at maturity level 0. Forests grow from maturity $0 \to 1 \to 2 \to 3$ over nine simulation steps (3 steps per level). Each forest produces $+0.2$ oxygen per step as a base, plus $+0.08 \times \text{maturity}$ as a bonus. Temperature cooling is context-sensitive: no cooling below 40°; cooling equal to maturity\_sum $\times 0.05$ in the optimal 40–60° range; cooling at maturity\_sum $\times 0.10$ above 60°; and emergency cooling at maturity\_sum $\times 0.20$ above 80°.
+
+\paragraph{Clear Forest (Cost: 2 eco).} Removes an owned Forest tile and immediately eliminates all oxygen production and temperature cooling from that cell. This action is used strategically when oxygen is already oversaturated above 85, because having many forests at high oxygen levels triggers wildfire drain proportional to forest count.
+
+\paragraph{Plant Farm (Cost: 3 eco).} Creates a Farm tile at crop stage 0, requiring water access in the target cell or any neighbor (water $\geq 3.0$). Crops advance from stage 0 through 3 every two simulation steps when water is available. Only stage-3 mature farms produce food passively at $+0.5$/step multiplied by farm efficiency. Each farm also drains $-0.2$ water per step through irrigation and warms the planet by $+0.1^\circ$ per step.
+
+\paragraph{Harvest Crop (Cost: 1 eco).} Adds $+15$ food instantly from a mature stage-3 farm, hard-capped at 85 to prevent oversaturation. The crop resets to stage 0 to regrow, and the harvesting agent receives a $+2.0$ score bonus. Passive farm production of $+0.5$/step is slow; harvesting provides the rapid food injection needed to prevent starvation crises.
+
+\paragraph{Build Solar Plant (Cost: 8 eco).} Generates $+1$ eco income per step, making it the primary passive eco source in the late game. However, each solar plant adds $+0.4^\circ$ of heat per step and drains $-0.1$ oxygen per step. Three solar plants alone produce $+1.2^\circ$/step, which is sufficient to push temperature toward dangerous levels without compensating forests.
+
+\paragraph{Adjust Resource Allocation (Cost: 0 eco).} A free action that sets the agent's internal priority mode to Farm, Forest, or Balanced. It does not modify any tile and is valid at any point, allowing agents to signal their current strategic stance.
+
+\paragraph{Action Chain Reactions.}
+The actions are not independent — they trigger cascading effects through the simulation engine. The most important chains are:
+
+\begin{itemize}[leftmargin=1.5cm]
+    \item \textbf{Water–Agriculture chain:} Building a Canal or Reservoir spreads water to adjacent cells, enabling Farm placement. Farms then drain water ($-0.2$/step), so overbuilding farms without sufficient water infrastructure causes crops to stall and food production to collapse.
+    \item \textbf{Forest–Solar conflict:} Forests cool the planet while Solar Plants heat it. An agent must balance both to maintain temperature in the optimal 40–60° range.
+    \item \textbf{High water flooding:} Water exceeding 80 triggers a flood drain of $(water - 80) \times 0.15$/step. At water $> 85$, farm efficiency drops to $\times 0.6$; at water $> 92$, it collapses to $\times 0.35$, causing near-total crop failure even with many farms present.
+    \item \textbf{Heat cascade:} If temperature rises above 65°, farm efficiency drops to $\times 0.7$; above 75°, it falls to $\times 0.4$ and population loses $-2.0$ health per step, creating an urgent recovery requirement.
+\end{itemize}
 
 \paragraph{Action Effects on Global Parameters.}
 The effect of actions is not limited to the modified tile. Every action changes the counts of rivers, reservoirs, farms, forests, or solar plants, and those counts are then used by the simulation engine to update the global meters. In simplified form, the project updates the planet through four main delta equations:
@@ -186,14 +259,218 @@ These equations show the central design idea of the project: local actions creat
 
 \subsection{System Dynamics and Interactions}
 
-The project uses a dynamic ecological model in which all important variables interact with one another. Water influences crop growth, crops influence food production, forests influence oxygen and cooling, and solar infrastructure influences temperature and eco income. This creates chain reactions throughout the simulation. A single action such as building a canal may improve water access, which can later support farms, which can later increase food, which can then affect population growth and overall stability.
-
-The global meters are central to the system. Water, food, oxygen, and temperature are continuously updated after each turn. These meters are not independent; instead, they form feedback loops. High temperature can reduce water through evaporation and weaken agriculture. Too much water can flood the system and reduce efficiency. High oxygen can support ecological health, but extreme oversaturation can also create imbalance. In this way, the project avoids one-dimensional optimization and instead requires balanced management.
-
-Extreme conditions play a major role in the simulation. Very low water, food, or oxygen levels can push the world toward collapse, while excessive values can also create instability. The system therefore contains self-regulation behavior. Examples include food spoilage at high food levels, oxygen bleed at excessive oxygen levels, heat radiation at very high temperature, and population-based consumption that naturally pulls the system back from unrealistic extremes. These mechanisms make the simulation more realistic and help create a stable but challenging decision environment.
+The project uses a dynamic ecological model in which all important variables interact with one another. Water influences crop growth, crops influence food production, forests influence oxygen and cooling, and solar infrastructure influences temperature and eco income. This creates chain reactions throughout the simulation. A single action such as building a canal may improve water access, which can later support farms, which can later increase food, which can then affect population growth and overall stability.The global meters are central to the system. Water, food, oxygen, and temperature are continuously updated after each turn. These meters are not independent; instead, they form feedback loops. High temperature can reduce water through evaporation and weaken agriculture. Too much water can flood the system and reduce efficiency. High oxygen can support ecological health, but extreme oversaturation can also create imbalance. In this way, the project avoids one-dimensional optimization and instead requires balanced management.Extreme conditions play a major role in the simulation. Very low water, food, or oxygen levels can push the world toward collapse, while excessive values can also create instability. The system therefore contains self-regulation behavior. Examples include food spoilage at high food levels, oxygen bleed at excessive oxygen levels, heat radiation at very high temperature, and population-based consumption that naturally pulls the system back from unrealistic extremes. These mechanisms make the simulation more realistic and help create a stable but challenging decision environment.
 
 \paragraph{Extreme Case Handling.}
 The project explicitly handles extreme cases instead of allowing uncontrolled growth or collapse. When water, food, or oxygen fall below critical thresholds, the stability score is hard-capped, which makes collapse possible after consecutive critical turns. On the opposite side, the simulation also penalizes oversaturation: high water creates flood drain, high food produces spoilage, high oxygen produces oxygen bleed and wildfire-related drain, and very high temperature activates heat radiation. Population is also bounded and affected by drought, heat stress, and oxygen shortage. These rules are important because they prevent unrealistic runaway behavior and make the world self-regulating even under aggressive agent strategies.
+
+\subsection{Global Resource Meters}
+
+The simulation maintains four global resource meters (0--100) with defined optimal ranges. Planetary stability is the average of how close all four meters are to their optimal bounds simultaneously.
+
+\vspace{0.3cm}
+\subsubsection*{Water Level (0--100, optimal: 50--80)}
+\vspace{0.1cm}
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Source} & \textbf{Effect} \\
+\midrule
+Each River tile      & $+0.3$/step \\
+Each Reservoir       & $+0.3$/step \\
+Each Forest          & $+0.05$/step (transpiration) \\
+Each Farm            & $-0.2$/step (irrigation drain) \\
+Population           & $-(\text{pop} \times 0.01)$ minimum/step \\
+Passive evaporation  & $-0.6$/step always \\
+If water $> 80$      & extra drain: $(water - 80) \times 0.15$ \\
+If temp $> 70^\circ$ & extra drain: $(temp - 70) \times 0.06$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.3cm}
+\subsubsection*{Food (0--100, optimal: 50--80)}
+\vspace{0.1cm}
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Source} & \textbf{Effect} \\
+\midrule
+Mature farm (stage 3)       & $+0.5$/step $\times$ farm\_efficiency \\
+Harvest Crop action         & $+15$ instantly (max up to 85) \\
+Population eating           & $-(\text{pop} \times 0.04)$ minimum/step \\
+Overpopulation ($> 100$)    & eats even more per capita \\
+Food $> 72$                 & spoilage: $(food - 72) \times 0.30$/step \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Farm efficiency modifiers:}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Temp $> 75^\circ$: $\times 0.4$
+    \item Temp $> 65^\circ$: $\times 0.7$
+    \item Water $> 92$: $\times 0.35$ (also applied)
+    \item Water $> 85$: $\times 0.6$ (also applied)
+\end{itemize}
+
+\vspace{0.3cm}
+\subsubsection*{Oxygen (0--100, optimal: 50--80)}
+\vspace{0.1cm}
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Source} & \textbf{Effect} \\
+\midrule
+Each Forest                  & $+0.2$/step \\
+Each Forest (maturity bonus) & $+0.08 \times$ maturity/step \\
+Each Farm                    & $-0.05$/step \\
+Each Solar Plant             & $-0.1$/step \\
+Population breathing         & $-(\text{pop} \times 0.04)$/step (reduced when O$_2 < 40$) \\
+Passive atmospheric drain    & $-0.3$/step always \\
+Temp $> 65^\circ$            & heat decomposition: $(temp - 65) \times 0.06$ drain \\
+Oxygen $> 80$                & bleeds off: $(oxy - 80) \times 0.65$/step \\
+Oxygen $> 85$ + forests      & wildfire drain: $(oxy - 85) \times \text{forests} \times 0.04$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.3cm}
+\subsubsection*{Temperature (0--100, optimal: 40--60)}
+\vspace{0.1cm}
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Source} & \textbf{Effect} \\
+\midrule
+Passive greenhouse               & $+0.5^\circ$/step always \\
+Each Farm                        & $+0.1^\circ$/step \\
+Each Solar Plant                 & $+0.4^\circ$/step \\
+Oxygen $> 80$                    & oxidation heat: $(oxy - 80) \times 0.04$ \\
+Population $> 100$               & human activity heat: $(pop - 100) \times 0.005$/step \\
+Forests (temp $> 60^\circ$)      & maturity\_sum $\times -0.10$/step \\
+Forests (temp $> 80^\circ$)      & maturity\_sum $\times -0.20$/step (emergency) \\
+Water cells on grid              & $-0.01$ per water-covered cell \\
+Temp $> 80^\circ$                & radiates heat: $(temp - 80) \times 0.175$ (self-regulation) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Population Dynamics}
+
+Population lives in the range \textbf{5 to 200}.
+
+\textbf{It grows when:}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Food $> 50$ (base growth $= (food - 50) \times 0.08$)
+    \item All 4 meters in optimal range $\to$ extra $+0.4$/step
+    \item Decent conditions $\to$ extra $+0.2$/step
+    \item Logistic brake: growth slows as you approach $200$ --- $\times(1 - pop/200)$
+\end{itemize}
+
+\textbf{It declines when:}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Oxygen $< 25$: $-2.5$/step (suffocation)
+    \item Oxygen $< 40$: $-0.8$/step
+    \item Temp $> 75^\circ$: $-2.0$/step
+    \item Temp $> 65^\circ$: $-0.8$/step
+    \item Water $< 15$: $-1.5$/step (drought)
+    \item Water $< 30$: $-0.6$/step
+\end{itemize}
+
+\textbf{Population in turn feeds back into the meters:}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Drinks water, eats food, breathes oxygen every step
+    \item Above population 100: \texttt{overload\_factor} increases per-capita consumption by up to 50\% at pop $= 200$
+    \item Above population 100: adds cumulative warming $+0.005^\circ$/step per person above 100
+\end{itemize}
+
+\textbf{The cycle:}
+
+\begin{lstlisting}
+Good food -> pop grows -> pop eats more food -> food drops
+           -> pop breathes more oxygen -> oxygen drops
+           -> pop drinks more water -> water drops
+           -> high pop generates heat -> temp rises
+               -> crops fail -> food collapses -> pop crashes
+\end{lstlisting}
+
+\subsection{Scoring System}
+
+Every simulation step (every turn):
+\begin{enumerate}[leftmargin=1.5cm]
+    \item \textbf{Both agents} get stability $\times 1.0$ points --- shared reward for keeping the planet healthy
+    \item \textbf{Individual asset scoring:}
+    \begin{itemize}[leftmargin=1.5cm]
+        \item Forest: $+0.2 \times$ maturity/step
+        \item Farm: $+0.15 \times$ crop\_stage/step
+        \item Reservoir: $+0.3$/step
+        \item River (owned): $+0.1$/step
+    \end{itemize}
+    \item \textbf{Harvest bonus}: $+2.0$ immediately when you harvest
+\end{enumerate}
+
+Planet stability is the average of how close all 4 meters are to their optimal ranges --- so both agents are incentivized to keep the planet balanced, even while competing for territory.
+
+\subsection{Extreme Value Handling}
+
+The simulation explicitly handles extreme meter values to prevent unrealistic runaway behavior and create meaningful crisis scenarios for agents to navigate.
+
+\subsubsection*{Water at 0}
+\begin{itemize}[leftmargin=1.5cm]
+    \item No farms can grow (no water access)
+    \item Population takes drought penalty: $-1.5$/step if $< 15$
+    \item Planet becomes a desert --- game spirals fast
+\end{itemize}
+
+\subsubsection*{Water at 100 (flooding)}
+\begin{itemize}[leftmargin=1.5cm]
+    \item \texttt{flood\_drain} removes water fast: $(100 - 80) \times 0.15 = -3$/step (self-correcting)
+    \item Farm efficiency $\times 0.35$ (near total crop failure)
+    \item Food collapses even if you have many farms
+\end{itemize}
+
+\subsubsection*{Food at 0}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Population shrinks rapidly (no food $=$ starvation)
+    \item Pop drop reduces resource consumption which gives a partial recovery window
+\end{itemize}
+
+\subsubsection*{Food at 100}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Spoilage: $(100 - 72) \times 0.30 = -8.4$/step (rapid self-correction)
+    \item Hard cap at 85 enforced on harvests
+\end{itemize}
+
+\subsubsection*{Oxygen at 0}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Population: $-2.5$/step (suffocation crisis)
+    \item Essentially unrecoverable without urgent forest planting
+\end{itemize}
+
+\subsubsection*{Oxygen above 85}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Wildfire drain: proportional to forest count --- \textbf{ironically, having many forests when oxygen is too high makes it drain faster}
+    \item This discourages pure oxygen stacking
+\end{itemize}
+
+\subsubsection*{Temperature above 80}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Heat radiation kicks in: $(temp - 80) \times 0.175$ (passive self-correction, but slow)
+    \item Forest emergency cooling doubles: maturity\_sum $\times 0.20$
+    \item Pop: $-2.0$/step, farm efficiency $\times 0.4$, heat evaporation worsens water drain
+    \item Game becomes a crisis requiring heavy forest planting
+\end{itemize}
+
+\subsubsection*{Temperature below 40 (cold)}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Forest cooling is disabled (forests don't cool when it's already cold)
+    \item Passive greenhouse $+0.5^\circ$/step will slowly warm it back up
+    \item Rarely a real danger since solar and farms constantly generate heat
+\end{itemize}
 
 \subsection{Agent Architectures}
 
@@ -201,9 +478,7 @@ The report focuses on three agents: \textbf{Minimax}, \textbf{Monte Carlo}, and 
 
 \subsubsection{Minimax Agent}
 
-The \textbf{Minimax} agent is based on adversarial search. It explores possible future moves by building a decision tree and estimating which move gives the best outcome while assuming the opponent will also act intelligently. This makes Minimax suitable for competitive situations where the agent must think ahead and consider both its own actions and the likely responses of the opponent.
-
-Within this project, Minimax acts as a structured planning model. It is useful because it evaluates future possibilities before making a move, which allows it to respond strategically to competitive pressure. This makes it a strong representative of classical search-based artificial intelligence.
+The \textbf{Minimax} agent is based on adversarial search. It explores possible future moves by building a decision tree and estimating which move gives the best outcome while assuming the opponent will also act intelligently. This makes Minimax suitable for competitive situations where the agent must think ahead and consider both its own actions and the likely responses of the opponent.Within this project, Minimax acts as a structured planning model. It is useful because it evaluates future possibilities before making a move, which allows it to respond strategically to competitive pressure. This makes it a strong representative of classical search-based artificial intelligence.
 
 \paragraph{Evaluation Function.}
 Minimax uses the shared state-evaluation function that is also used by Monte Carlo at the end of rollouts. In simplified form, the evaluation score can be written as:
@@ -214,40 +489,56 @@ E(s) = 10S + 8R + 12T + 5D_{\text{score}} + P_{\text{collapse}} + 1.5A + 2D_{\te
 
 where $S$ is stability, $R$ is the combined resource score, $T$ is temperature optimality, $D_{\text{score}}$ is score difference, $P_{\text{collapse}}$ is the collapse penalty, $A$ is asset value, $D_{\text{territory}}$ is cell-control difference, $P_{\text{health}}$ is population health, and $D_{\text{eco}}$ is eco-point advantage. This evaluation function gives the agent a multi-objective view of the game instead of rewarding only one resource.
 
-\paragraph{Pseudocode.}
-\begin{lstlisting}
-Algorithm: Minimax Decision Procedure
-Input: current state s, search depth d
-Output: best evaluated action
+Table~3.9 details each component with its weight and meaning. Temperature receives the highest weight of $\times 12.0$ because it is the most critical systemic variable: out-of-range temperature simultaneously reduces farm efficiency, damages population health, and destabilizes oxygen. The collapse penalty can produce values as severe as $-100$ per resource meter in crisis, meaning a near-collapse state dominates all positive components and ensures both Minimax and Monte Carlo strongly avoid dangerous world states.
 
-FUNCTION MINIMAX(s, d, maximizingPlayer)
-    IF d = 0 OR Terminal(s) THEN
-        RETURN Evaluate(s)
-    END IF
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|c|p{7cm}|}
+\hline
+\textbf{Component} & \textbf{Weight} & \textbf{Description} \\ \hline
+Planet Stability       & $\times 10.0$ & World stability score mapped from 0.0--1.0 \\ \hline
+Resource Level Score   & $\times 8.0$  & Average of water, food, and oxygen meter scores (each scored $-0.5$ to $1.0$) \\ \hline
+Temperature Optimality & $\times 12.0$ & Closeness to optimal 40--60°; highest weight in the function \\ \hline
+Score Differential     & $\times 5.0$  & Agent score minus opponent score \\ \hline
+Collapse Penalty       & $\times 1.0$  & Up to $-100$ per resource in crisis; $-50$ for extreme temperature \\ \hline
+Strategic Asset Value  & $\times 1.5$  & Context-sensitive value of owned forests, farms, and reservoirs \\ \hline
+Territory Control      & $\times 2.0$  & Owned cell count minus opponent cell count \\ \hline
+Population Health      & $\times 1.0$  & Ranges from 0 to 9.0; peaks at population 150+ \\ \hline
+Eco Advantage          & $\times 0.3$  & Own eco points minus opponent eco points \\ \hline
+\end{tabular}
+\caption{Component weights in \texttt{evaluate\_state()} — shared by Minimax and Monte Carlo}
+\end{table}
 
-    IF maximizingPlayer = TRUE THEN
-        bestValue <- -infinity
-        FOR each action a in ValidActions(s) DO
-            child <- Result(s, a)
-            value <- MINIMAX(child, d - 1, FALSE)
-            bestValue <- max(bestValue, value)
-        END FOR
-        RETURN bestValue
-    ELSE
-        bestValue <- +infinity
-        FOR each action a in ValidActions(s) DO
-            child <- Result(s, a)
-            value <- MINIMAX(child, d - 1, TRUE)
-            bestValue <- min(bestValue, value)
-        END FOR
-        RETURN bestValue
-    END IF
-END FUNCTION
-\end{lstlisting}
+\begin{algorithm}[h!]
+\caption{Minimax Decision Procedure}
+\SetAlgoLined
+\KwIn{Current state $s$, search depth $d$, maximizing flag}
+\KwOut{Evaluation value}
+
+\If{$d = 0$ or Terminal$(s)$}{
+    \Return Evaluate$(s)$\;
+}
+
+\If{maximizing}{
+    $value \leftarrow -\infty$\;
+    \ForEach{$a \in$ ValidActions$(s)$}{
+        $value \leftarrow \max(value,$ Minimax(Result$(s,a), d-1,$ false$))$\;
+    }
+    \Return $value$\;
+}
+\Else{
+    $value \leftarrow +\infty$\;
+    \ForEach{$a \in$ ValidActions$(s)$}{
+        $value \leftarrow \min(value,$ Minimax(Result$(s,a), d-1,$ true$))$\;
+    }
+    \Return $value$\;
+}
+\end{algorithm}
 
 Figure 3.3 presents the basic decision-tree idea behind the Minimax agent. The figure supports the explanation by showing how the agent expands candidate actions and evaluates possible future states before choosing a move.
 
-\begin{figure}[h!]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.82\textwidth]{minimax_tree.png}
 \caption{Minimax Decision Tree}
@@ -255,9 +546,7 @@ Figure 3.3 presents the basic decision-tree idea behind the Minimax agent. The f
 
 \subsubsection{Monte Carlo Agent}
 
-The \textbf{Monte Carlo} agent evaluates actions by simulation. Instead of constructing a full adversarial tree, it tries many rollout-based futures from a candidate action and then estimates which action produces the best average result. This method is useful when the environment is complex and exact search is expensive, because it provides a practical way to estimate action quality through repeated sampling.
-
-In the context of this project, Monte Carlo is effective because it estimates action quality from repeated experimental rollouts rather than strict tree expansion. This gives it flexibility in a dynamic ecological environment where many interacting variables can change the future outcome of an action.
+The \textbf{Monte Carlo} agent evaluates actions by simulation. Instead of constructing a full adversarial tree, it tries many rollout-based futures from a candidate action and then estimates which action produces the best average result. This method is useful when the environment is complex and exact search is expensive, because it provides a practical way to estimate action quality through repeated sampling.In the context of this project, Monte Carlo is effective because it estimates action quality from repeated experimental rollouts rather than strict tree expansion. This gives it flexibility in a dynamic ecological environment where many interacting variables can change the future outcome of an action.
 
 \paragraph{Evaluation Function.}
 Monte Carlo uses the same evaluation function as Minimax, but it applies it after several simulated futures instead of directly at the leaves of a search tree. If an action produces $N$ rollout results, then the action score is the mean final evaluation:
@@ -268,40 +557,37 @@ MC(a) = \frac{1}{N}\sum_{i=1}^{N} E(s_i^{\text{rollout}}).
 
 This makes Monte Carlo less dependent on exact tree expansion and more dependent on the quality of sampled futures. It is therefore well suited for a dynamic simulation where approximate future estimation is often more practical than exhaustive search.
 
-\paragraph{Pseudocode.}
-\begin{lstlisting}
-Algorithm: Monte Carlo Action Selection
-Input: current state s, rollout count N, rollout depth d
-Output: best action
+\begin{algorithm}[h!]
+\caption{Monte Carlo Action Selection}
+\SetAlgoLined
+\KwIn{Current state $s$, rollout count $N$, rollout depth $d$}
+\KwOut{Best selected action}
 
-FUNCTION MONTE_CARLO_ACTION(s, N, d)
-    bestAction <- null
-    bestScore <- -infinity
+$best\_action \leftarrow$ None\;
+$best\_score \leftarrow -\infty$\;
 
-    FOR each action a in CandidateActions(s) DO
-        totalScore <- 0
+\ForEach{$a \in$ CandidateActions$(s)$}{
+    $total \leftarrow 0$\;
 
-        REPEAT N times
-            nextState <- Result(s, a)
-            rolloutState <- RandomRollout(nextState, d)
-            totalScore <- totalScore + Evaluate(rolloutState)
-        END REPEAT
+    \For{$i \leftarrow 1$ \KwTo $N$}{
+        $next\_state \leftarrow$ Result$(s,a)$\;
+        $rollout\_state \leftarrow$ RandomRollout$(next\_state,d)$\;
+        $total \leftarrow total +$ Evaluate$(rollout\_state)$\;
+    }
 
-        averageScore <- totalScore / N
+    $avg \leftarrow total / N$\;
 
-        IF averageScore > bestScore THEN
-            bestScore <- averageScore
-            bestAction <- a
-        END IF
-    END FOR
+    \If{$avg > best\_score$}{
+        $best\_score \leftarrow avg$\;
+        $best\_action \leftarrow a$\;
+    }
+}
 
-    RETURN bestAction
-END FUNCTION
-\end{lstlisting}
-
+\Return $best\_action$\;
+\end{algorithm}
 The logic of this rollout-based process is illustrated in Figure 3.4. This figure helps explain how the Monte Carlo agent samples possible futures and then uses average outcome quality to guide the final action choice.
 
-\begin{figure}[h!]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.82\textwidth]{monte_carlo_flow.png}
 \caption{Monte Carlo Decision Flow}
@@ -311,11 +597,7 @@ The logic of this rollout-based process is illustrated in Figure 3.4. This figur
 
 \subsubsection{DQN Architecture}
 
-The Deep Q-Network (DQN) is the learning-based agent in the project. Unlike Minimax and Monte Carlo, which evaluate actions through search or simulation at decision time, DQN learns a mapping from world states to action values through repeated training. Its input is a numerical representation of the current environment, including major planet conditions and competitive features, and its output is a set of predicted values for the available actions.
-
-The DQN model uses a neural network to approximate the quality of actions. Instead of storing a direct value for every possible situation, it learns patterns from numerical state features and predicts which actions are likely to be beneficial. In this project, the state representation includes important information such as water, food, oxygen, temperature, population, stability, owned cells, opponent cells, eco points, and score difference. These features allow the network to reason about both environmental balance and competitive advantage at the same time.
-
-During training, the agent stores previous experiences and learns from them over time. It uses a replay buffer to sample past experiences, which helps reduce correlation between consecutive updates, and a target network to stabilize training. This allows the model to gradually improve its policy instead of relying only on immediate handcrafted reasoning. The architecture of the model is shown in Figure 3.5, where the relationship between input features, hidden processing layers, and action-value outputs can be presented clearly.
+The Deep Q-Network (DQN) is the learning-based agent in the project. Unlike Minimax and Monte Carlo, which evaluate actions through search or simulation at decision time, DQN learns a mapping from world states to action values through repeated training. Its input is a numerical representation of the current environment, including major planet conditions and competitive features, and its output is a set of predicted values for the available actions.The DQN model uses a neural network to approximate the quality of actions. Instead of storing a direct value for every possible situation, it learns patterns from numerical state features and predicts which actions are likely to be beneficial. In this project, the state representation includes important information such as water, food, oxygen, temperature, population, stability, owned cells, opponent cells, eco points, and score difference. These features allow the network to reason about both environmental balance and competitive advantage at the same time.During training, the agent stores previous experiences and learns from them over time. It uses a replay buffer to sample past experiences, which helps reduce correlation between consecutive updates, and a target network to stabilize training. This allows the model to gradually improve its policy instead of relying only on immediate handcrafted reasoning. The architecture of the model is shown in Figure 3.5, where the relationship between input features, hidden processing layers, and action-value outputs can be presented clearly.
 
 \paragraph{Learning Equation.}
 The core update rule of the DQN agent is based on the Bellman target:
@@ -330,9 +612,9 @@ r_t + \gamma \max_{a'} Q_{\text{target}}(s_{t+1}, a'), & \text{otherwise.}
 
 The online network predicts $Q(s_t,a_t)$ and is trained to move closer to $y_t$. In the implementation, this difference is optimized with Huber loss, which is more stable than plain mean squared error for noisy reinforcement-learning updates.
 
-\begin{figure}[h!]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{dqn_architecture.png}
+\includegraphics[width=1.04\textwidth]{dqn_architecture.png}
 \caption{DQN Model Architecture}
 \end{figure}
 
@@ -344,6 +626,8 @@ From a system perspective, the DQN decision flow follows a repeated sequence: th
 
 Another important point is that DQN does not become strong from a single game. Its performance depends on repeated exposure to the environment, gradual parameter updates, and the ability to learn from both successful and unsuccessful decisions. Figure 3.6 should therefore be used to show the complete flow of observation, action, reward, storage, and learning update so that the reader can understand how the model improves over time.
 
+During each training step, the network minimizes the difference between the predicted Q-value and the Bellman target using \textbf{Huber loss}, which is more robust to large reward outliers than plain mean squared error and produces more stable gradients in environments with highly variable rewards. To prevent gradient explosion, all gradient norms are \textbf{clipped at 1.0} before each parameter update, which keeps the network weights from changing too drastically in a single step. The \textbf{target network} is synchronized with the online network only once every fixed number of steps rather than after every update, which prevents the training target from shifting too rapidly and causing the oscillation that typically destabilizes naive Q-learning implementations.
+
 \paragraph{Reward Function.}
 Unlike Minimax and Monte Carlo, DQN does not rely on a single final state evaluation only. It learns from a reward function after each action and simulation step. In simplified form, the reward used in the project can be expressed as:
 
@@ -353,7 +637,31 @@ r_t = 20(S_t - S_{t-1}) + B_{\text{stable}} - P_{\text{collapse}} + 1.5T_t + 1.5
 
 where the reward includes stability improvement, temperature quality, resource quality, score difference, territory advantage, asset value, and eco-hoarding penalty. This design is important because it teaches the DQN agent not only to survive, but also to keep the ecosystem balanced while remaining competitive.
 
-\begin{figure}[h!]
+The key difference between the reward function and the state evaluation function is that \texttt{compute\_reward} is \textbf{delta-based}: the core signal is the change in stability rather than its absolute value. This means the DQN is rewarded for \emph{improving} the world, not merely for occupying a good state. Table~3.10 breaks down every component.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|c|p{6.5cm}|}
+\hline
+\textbf{Component} & \textbf{Scale} & \textbf{Description} \\ \hline
+Stability delta          & $\times 20.0$       & Core signal: change in stability this step ($\Delta S \times 20$) \\ \hline
+Stability zone bonus     & $+3.0$ / $+1.0$     & $+3.0$ if stability is high; $+1.0$ if moderate \\ \hline
+Stability zone penalty   & $-5.0$ / $-20.0$    & $-5.0$ if stability is low; $-20.0$ near collapse \\ \hline
+Temperature optimality   & $\times 1.5$        & Score for temperature closeness to 40--60° range \\ \hline
+Resource optimality      & $\times 1.5$        & Average water, food, oxygen meter score \\ \hline
+Population health        & $+2.0$ to $-8.0$    & $+2.0$ at pop 50--100 (thriving); $-8.0$ if pop crashes below 20 \\ \hline
+Score differential       & $\times 0.15$       & Competitive signal: own score vs opponent score \\ \hline
+Territory control        & $\times 0.12$       & Cell count advantage over opponent \\ \hline
+Asset value              & $\times 0.2$        & Value of owned buildings and terrain \\ \hline
+Eco hoarding penalty     & $-0.05$/unit        & Penalty for unspent eco above 60; discourages inaction \\ \hline
+\end{tabular}
+\caption{Component breakdown of \texttt{compute\_reward()} used exclusively by the DQN agent}
+\end{table}
+
+The eco hoarding penalty is unique to the DQN reward and does not appear in \texttt{evaluate\_state()} — it specifically addresses a failure mode where the DQN accumulates eco points without spending them, which reduces its ability to build assets and weakens its long-term performance.
+
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.82\textwidth]{dqn_decision_flow.png}
 \caption{DQN Decision Flow}
@@ -375,11 +683,9 @@ The three selected agents were compared under the same environment settings and 
 
 \subsection{Results and Discussion}
 
-The results indicate that the project successfully supports meaningful comparison among different AI methods. Minimax performed as a stable baseline and showed good short-horizon planning, but its effectiveness was reduced when the search depth had to be kept small for practical execution. Monte Carlo performed better in most cases against Minimax because it estimated action quality from multiple sampled futures instead of relying on a strict depth-limited tree. This made it more adaptable in a simulation where the world changes continuously after every action.
+The results indicate that the project successfully supports meaningful comparison among different AI methods. Minimax performed as a stable baseline and showed good short-horizon planning, but its effectiveness was reduced when the search depth had to be kept small for practical execution. Monte Carlo performed better in most cases against Minimax because it estimated action quality from multiple sampled futures instead of relying on a strict depth-limited tree. This made it more adaptable in a simulation where the world changes continuously after every action.The best overall performance came from the trained DQN agent. After training, DQN achieved an approximate win rate of \textbf{62\%} against the other two agents. This suggests that the network was able to learn useful patterns from repeated interaction with the environment and convert them into stronger decisions over time. In particular, DQN benefited from learning the long-term relationship between local actions and global ecological balance, which is difficult to encode perfectly in a manually designed search strategy.
 
-The best overall performance came from the trained DQN agent. After training, DQN achieved an approximate win rate of \textbf{62\%} against the other two agents. This suggests that the network was able to learn useful patterns from repeated interaction with the environment and convert them into stronger decisions over time. In particular, DQN benefited from learning the long-term relationship between local actions and global ecological balance, which is difficult to encode perfectly in a manually designed search strategy.
-
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \begin{tabular}{|l|l|l|}
 \hline
@@ -391,7 +697,7 @@ DQN & About 62\% win rate overall & Strong learned policy after training \\ \hli
 \caption{Summary of observed comparative performance}
 \end{table}
 
-From a discussion perspective, these results are consistent with the structure of the project. The environment contains many interacting variables, delayed consequences, and feedback loops. In such a setting, a purely depth-limited search method can miss important long-term effects, while rollout-based or learned methods can perform better. Therefore, the comparison supports the idea that environmental simulation is a strong testbed for both classical AI and deep reinforcement learning.
+From a discussion perspective, these results are consistent with the structure of the project. The environment contains many interacting variables, delayed consequences, and feedback loops. In such a setting, a purely depth-limited search method can miss important long-term effects, while rollout-based or learned methods can perform better. 
 
 % ================================================================
 % Limitations
@@ -415,9 +721,7 @@ Finally, the reported results are based on observed project behavior and trainin
 
 \subsection{Conclusion}
 
-World Balance Architects successfully combines ecological simulation, strategic decision making, and artificial intelligence in a single interactive framework. The project demonstrates how a shared environment with water, food, oxygen, temperature, population, and stability can be used to evaluate different AI approaches under the same conditions. Through this structure, the project achieves both educational and technical value: it is visually understandable, experimentally useful, and rich enough to support meaningful agent comparison.
-
-The comparison of Minimax, Monte Carlo, and DQN shows that the project is capable of distinguishing different types of intelligence. Minimax provides a classical planning baseline, Monte Carlo offers stronger adaptability through simulation, and DQN shows the advantage of learning from repeated experience. The observed results, especially the approximate 62\% win rate of DQN and the frequent advantage of Monte Carlo over Minimax, support the usefulness of the project as an AI laboratory study.
+EcoForge successfully combines ecological simulation, strategic decision making, and artificial intelligence in a single interactive framework. The project demonstrates how a shared environment with water, food, oxygen, temperature, population, and stability can be used to evaluate different AI approaches under the same conditions. Through this structure, the project achieves both educational and technical value: it is visually understandable, experimentally useful, and rich enough to support meaningful agent comparison.The comparison of Minimax, Monte Carlo, and DQN shows that the project is capable of distinguishing different types of intelligence. Minimax provides a classical planning baseline, Monte Carlo offers stronger adaptability through simulation, and DQN shows the advantage of learning from repeated experience. The observed results, especially the approximate 62\% win rate of DQN and the frequent advantage of Monte Carlo over Minimax, support the usefulness of the project as an AI laboratory study.
 
 \subsection{Future Work}
 
@@ -456,8 +760,11 @@ Pygame Community,
 \url{https://www.pygame.org/docs/}
 
 \bibitem{projectcode}
-World Balance Architects Project Source Code,
-Python implementation files including \texttt{main.py}, \texttt{engine/simulate.py}, \texttt{agents/minimax.py}, \texttt{agents/monte\_carlo.py}, and \texttt{agents/dqn\_agent.py}.
+EcoForge Project Source Code,
+Python implementation files including \texttt{main.py}, 
+\texttt{engine/simulate.py}, \texttt{agents/minimax.py}, 
+\texttt{agents/monte\_carlo.py}, and 
+\texttt{agents/dqn\_agent.py}.
 
 \end{thebibliography}
 
